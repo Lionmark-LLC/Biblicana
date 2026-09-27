@@ -7,9 +7,11 @@ import {
     TextDisplayBuilder,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
+import { getVersification } from '../utils/versification.js';
 import { renderInterlinearEphemeral } from '../utils/interlinearRenderer.js';
 import { respondToInteraction } from '../utils/paginationHelper.js';
 import logger from '../utils/logger.js';
+import { reportError } from '../utils/errorReporting.js';
 
 // Message context-menu: right-click any message → Apps → "Show interlinear".
 // Pulls the first verse-level scripture reference from the message and opens
@@ -29,10 +31,12 @@ export default {
         ].join(' ');
 
         const refs = parseScriptureRefs(searchText);
-        const verseRef = refs.find(r => r.startVerse != null);
+        const versification = await getVersification();
+        const validRefs = versification.filter(refs);
+        const verseRef = validRefs.find(r => r.startVerse != null);
         if (!verseRef) {
             return interaction.reply({
-                content: '🔍 Need a verse-level reference (like "John 3:16") for an interlinear view. That message has none I could parse.',
+                content: '🔍 Need a valid verse-level reference (like "John 3:16") for an interlinear view. That message has none I could parse.',
                 flags: MessageFlags.Ephemeral,
             });
         }
@@ -58,6 +62,7 @@ export default {
                 translation,
             });
         } catch (err) {
+            reportError(err, { area: 'command', handler: 'ctxShowInterlinear' });
             logger.error(`[CtxInterlinear] Render failed: ${err.message}`);
             // The old `!interaction.replied` guard is wrong now that we defer:
             // after deferReply, `replied` is false but `deferred` is true, so a
