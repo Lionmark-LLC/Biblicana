@@ -6,9 +6,14 @@ import { Routes, REST } from 'discord.js';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import logger from './utils/logger.js';
+import { refuseProdUnlessAllowed } from './utils/prodGuard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Before anything loads or reaches Discord. A guild deploy to the prod app is
+// refused too: the test bot is the only thing `pnpm run deploy` should touch.
+refuseProdUnlessAllowed('src/deploy.js');
 
 // Parse CLI args
 const argv = yargs(hideBin(process.argv))

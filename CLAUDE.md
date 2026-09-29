@@ -144,6 +144,8 @@ Chosen over Healthchecks.io for one account and one dashboard. The trade is shar
 
 Never run `src/deploy.js` with the `--global` flag for development. The `deploy` npm script registers commands to a single guild (instant); `deployg` registers globally (up to an hour propagation across all ~570 servers). The test bot has its own `CLIENTID` and is deployed to a test guild only.
 
+**Prod guard (`src/utils/prodGuard.js`, 2026-09-29).** `src/deploy.js` and `src/pruneGuildData.js` exit 2 before touching Discord or the database when the environment points at prod: `CLIENTID` is the prod application (`1165716269425758249`), `DISCORDTOKEN` decodes to it (a token's first segment is the base64 of the bot's ID, and the prune logs in with the token alone, never reading `CLIENTID`), or `PGHOST` is the prod Neon endpoint `ep-proud-snowflake-a4xubaxb` (the plain, `-pooler` and per-compute hosts all match). `BIBLICANA_ALLOW_PROD=1`, exactly `1`, overrides it, and the script then says it is acting on production. The prod values are constants in code on purpose: nothing in `.env` can redefine what counts as prod. The variable's underscores break the naming convention above because ops-platform named it. `tests/prodGuard.test.js` spawns both real scripts with a prod-shaped env and asserts the refusal comes before any network step. A new admin script that writes to Discord or the database must call `refuseProdUnlessAllowed` before it connects.
+
 ### Embed colors / chrome
 
 Embed color is `0x083459` (a dark teal). Embed footer, icon, and color values live in `.env` (not hardcoded), so they can be overridden per environment — useful for making local dev visually distinct from prod.
@@ -227,8 +229,10 @@ they are ordered because two of them must happen BEFORE the restart.
    and truncate silently with a clean exit, and a half-copied SQLite has a
    valid header, so early reads succeed and later ones fail hours later in
    prod. Verify with `md5` on both ends, not the exit code.
-4. **`npm run deployg` only if a slash command was added, renamed, or had its
-   options changed.** Components (buttons, select menus) are matched by
+4. **`deployg` only if a slash command was added, renamed, or had its
+   options changed**, and only by Kenneth, on the droplet as `biblicana`:
+   `BIBLICANA_ALLOW_PROD=1 pnpm run deployg`. Without the variable the prod
+   guard refuses (exit 2; see "Slash command deployment"). Components (buttons, select menus) are matched by
    `customId` at interaction time and need nothing but a restart. Global
    registration takes up to an hour to propagate; it is a `PUT` over the whole
    set, so it cannot duplicate.

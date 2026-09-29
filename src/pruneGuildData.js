@@ -24,9 +24,14 @@ import { Client, GatewayIntentBits } from 'discord.js';
 import DatabaseHandler from './database/redisPGHandler.js';
 import { postgresConfig } from './config.js';
 import logger from './utils/logger.js';
+import { refuseProdUnlessAllowed } from './utils/prodGuard.js';
 import 'dotenv/config';
 
 const APPLY = process.argv.includes('--apply');
+
+// Before Redis, Postgres or the gateway. Refuses the dry run as well: it logs in
+// with the prod token and reads every prod guild row.
+refuseProdUnlessAllowed('src/pruneGuildData.js');
 
 function summarize(data) {
     const daily = data?.dailyVerse;
