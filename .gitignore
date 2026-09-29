@@ -29,6 +29,9 @@ FOLLOWUPS.md
 .neon
 .agents/
 .claude/skills/
+# Per-developer Claude Code overrides. The committed .claude/settings.json holds
+# the prod deny rules; a local allow cannot override a deny, so this stays safe.
+.claude/settings.local.json
 skills-lock.json
 
 # Release announcement drafts — copy for top.gg, not part of the codebase
