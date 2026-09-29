@@ -6,6 +6,17 @@ Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md
 
 ## 2026-09-29
 
+### Repo refuses prod before a builder agent exists
+
+ops-platform is adding a builder agent for this repo (Stephen: Claude Code in a container, PRs only). Nothing in the repo refused prod: `src/deploy.js --global --rm` empties every prod slash command and `src/pruneGuildData.js --apply` deletes guild rows, both acting on whatever `.env` says. Six scoped commits on `main`, none deployed (nothing here changes the running bot):
+
+- **Prod guard** (`37d0982`): both scripts exit 2 before touching Discord or the database when `CLIENTID` is the prod application, `DISCORDTOKEN` decodes to it, or `PGHOST` is the prod Neon endpoint in any host form (plain, `-pooler`, per-compute), unless `BIBLICANA_ALLOW_PROD=1`. The token check was not in the handoff and closes its biggest gap: the prune logs in with the token alone and never reads `CLIENTID`, so a prod token beside a test `CLIENTID` would have passed. The prod endpoint (`ep-proud-snowflake-a4xubaxb`) came from the Neon API, read-only; it is not secret, the password is. **Tests 373 -> 386**; the spawned tests were mutation-checked (guard removed, both refusal tests failed). `deployg` on prod is now `BIBLICANA_ALLOW_PROD=1 pnpm run deployg` (CLAUDE.md release checklist step 4, `BIBLICANA_RELEASE.md`).
+- **`.claude/settings.json`** (`217db78`): denies command registration, the prune, `ssh`/`scp`, `wrangler`/`vercel`, and reads of `.env*` and logs, for EVERY Claude session in the repo, Kenneth's included. Confirmed live: `ssh -V` and `node src/deploy.js --help` were both refused in the session that added it. `settings.local.json` is gitignored.
+- **CLAUDE.md** (`7a4a60c`): a first-read "Rules for agents" section, plus the stale lines fixed (discord.js 14.14.1 -> 14.26.3, "main is CommonJS", `refactor`-only labels, the `@discordjs/builders` pitfall; nothing imports that package now, so it is an unused direct dep, left in place).
+- **pnpm pinned** (`09cec3d`): `packageManager: pnpm@10.34.5`, prod's corepack version, not this Mac's 10.33.0; a pin prod lacks would make corepack download pnpm in the middle of a deploy. Standalone pnpm switched itself to 10.34.5; frozen install left the lockfile untouched.
+- **Neon agent skills removed** (`c540cb9`): the gitignored `.claude/skills/neon*` and `.agents/skills/neon*` told agents to use `DATABASE_URL` and run `neon env pull`, which rewrites `.env`. Deleted with `skills-lock.json` and `.neon`; the ignore rules stay.
+- **blueberean-site `CLAUDE.md`** (`3bf991a` in that repo): Cloudflare via the deploy gate, never deploy from a session, `/privacy` and `/terms` fixed by the bot's `theme.js`.
+
 ### Prod moved to `main`; Peter's deploy gate installed on the droplet
 
 ops-platform (`4d1e433`) built a deploy path so Peter can ship bot commits after Kenneth approves by email. This entry covers the droplet side of it, plus moving prod's checkout from `refactor` to `main`. No restart happened, and no code changed.
