@@ -8,13 +8,26 @@ Guidance for Claude Code sessions working in this repository.
 
 Repo owner: the `Lionmark-LLC` GitHub org (`Lionmark-LLC/Biblicana`, public) since 2026-09-25; it moved from `BlueBerean/Biblicana`, and the old URLs still redirect for web and git. `BlueBerean` remains the bot's brand GitHub account. Kenneth/`Nazareneism` is also a contributor.
 
+## Rules for agents (read first)
+
+Binding on every Claude session in this repo, and written for ops-platform's builder agent (Stephen: Claude Code in a container, no prod access, output is pull requests). A builder's job ends at a PR against `main`; Kenneth reviews and merges it, and Peter deploys after Kenneth approves by email. Nothing below is a judgement call.
+
+- **Never register slash commands.** No `pnpm run deploy`, `deployg`, `node src/deploy.js` in any form. `deploy.js --global --rm` empties the command list of the prod bot in every server. Registration is Kenneth's step.
+- **Never run the guild prune** (`src/pruneGuildData.js`, `pnpm run prune`), dry run included: it logs in with a bot token and reads every guild row.
+- **Never touch prod data or the prod Discord application.** Prod is application `1165716269425758249` (Biblicana#7650) and Neon endpoint `ep-proud-snowflake-a4xubaxb` (branch `main`). `src/utils/prodGuard.js` refuses both scripts above when `.env` points there; never set `BIBLICANA_ALLOW_PROD`, which only Kenneth uses. No SQL against Neon, no Redis on the droplet, no Discord API calls with a prod credential.
+- **Never run a second process with the prod token.** A prod-token bot running in two places answers every event twice in ~590 servers. Only the droplet runs it.
+- **Never read logs**, local or prod, and never ask for them to be pasted. Prod logs carry AI-chat excerpts from real users, and `DEBUG_AICHAT_RAG=1` logs full prompts with message history. Diagnose from code, tests and Sentry's scrubbed issues instead.
+- **Never toggle the MessageContent intent** or change any setting in the Discord developer portal. MessageContent is a privileged intent that took about two months of review to get (approved 2026-06-18); passive detection and AI chat depend on it, and switching it off can mean a fresh review.
+- **Never read `.env*`, never `ssh`/`scp`, never deploy the website** (`wrangler`, `vercel`). `.claude/settings.json` denies these; treat the denies as a statement of intent, not the only barrier.
+- **Verify with the test suite:** `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run lint`, on Node 22. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
+
 ## Tech stack
 
 - **Runtime**: **Node.js 22, prod and dev** (prod since the 2026-09-25 migration: v22.23.3 from the NodeSource apt repo; dev v22.23.3 via nvm). `engines` `>=22 <23` in `package.json` is the tracked pin; `.nvmrc` is excluded per machine via `.git/info/exclude`, so set it to 22 locally. `@sentry/node` 11 declares `>=20.19 || >=22.12`: Node 18 is no longer an option anywhere.
-- **Discord library**: discord.js 14.14.1 + @discordjs/builders 1.7.0
+- **Discord library**: discord.js 14.26.3 (see the `pnpm-lock.yaml`; `package.json` says `^14.26.3`). `@discordjs/builders` 1.14.1 is still a direct dependency but nothing in `src/` imports it any more: commands take `SlashCommandBuilder` from `discord.js`.
 - **State**: ioredis 5.x (local Redis on the same host as the bot) + pg 8.x (Neon serverless Postgres)
 - **Bible data**: SQLite — all gitignored.
-  - On `main`: `bible.db` (~131 MB, verse text + interlinear), `strongs.db` (~2.7 MB, Hebrew/Greek lexicon). Both present on prod.
+  - `bible.db` (~131 MB, verse text + interlinear), `strongs.db` (~2.7 MB, Hebrew/Greek lexicon). Both present on prod.
   - Seven additional local SQLite DBs (~566 MB total): `lxx.sqlite` (6.3 MB, Brenton's English Septuagint 1851, 28,690 verses keyed by MASORETIC coordinates — see `src/buildLxx.js` for why the alignment is non-trivial), `extrabiblical_data.sqlite` (100 MB, 334 authors — 285 patristic plus 49 medieval/modern, see the era-labelling note below — 61k entries), `clean_commentary.db` (428 MB, 6 modern commentators incl. Gill/Clarke/Henry/JFB/Keil/Tyndale, 88k verse + 4.5k chapter-intro entries), `person_places.db` (6.3 MB, biblical figures/places w/ coordinates), `dictionary.sqlite` (5 MB, Easton's + Smith's, 8.4k entries), `cross-references.sqlite` (11 MB, Treasury of Scripture Knowledge, 340k refs), `categories.sqlite` (11 MB, 7.4k topical categories, 406k refs). **All present on prod** since the 2026-06-30 v1.5.0 migration.
   - `bsb_footnotes.sqlite` (392 KB, the BSB's 4,817 translator footnotes, keyed like `bible.db`) — **optional**, unlike the rest: absent, `bsbFootnotesWrapper` logs one warning and returns `[]`. Built by `src/buildBsbFootnotes.js` from Kenneth's local `data/new_data/database.db`, which is the only source; `bible.db`'s BSB column has the footnotes stripped.
   - `difficulties.sqlite` (1 MB, **optional** like the footnotes) — two public-domain works on alleged contradictions: **Haley**, *An Examination of the Alleged Discrepancies of the Bible* (1874), ~500 verse-keyed cases, and **Torrey**, *Difficulties and Alleged Errors and Contradictions in the Bible* (1907), 24 essays chunked at paragraph boundaries. Built by `src/buildDifficulties.js` from the archive.org OCR in `~/Development/reference/christian/archive-org/` (`examination/examinationof00hale_*`, `difficulties/difficultiesalle0000torr_*`) — that folder is the ONLY source, so keep it. Read the importer's header before touching it: the OCR has Roman-numeral chapters, damaged book names, and side-by-side quoted columns read straight across, and each has a specific fix. The build refuses to finish unless seven sentinel entries resolve with the right pages.
@@ -31,8 +44,8 @@ src/
   instrument.js           # Sentry init, preloaded via `node --import` BEFORE index.js (see
                           #   "Sentry and the heartbeat"); started without it, Sentry is off
   index.js                # Bot entry; wires up Discord client, loads commands/events/buttons
-  config.js               # (refactor) Centralized Postgres config object
-  commands/               # Slash commands — one file per command (34 on refactor: 33 global
+  config.js               # Centralized Postgres config object
+  commands/               # Slash commands — one file per command (34: 33 global
                           #   + /testwelcome, which carries `devOnly: true` and is excluded
                           #   from the global registry by deploy.js)
   components/buttons/     # Button interaction handlers
@@ -45,14 +58,14 @@ src/
   events/                 # Discord gateway event handlers (ready, interactionCreate)
   utils/
     bibleHelper.js        # bibleWrapper + strongsWrapper singletons + getBookId / numbersToBook
-    studyHelper.js        # (refactor) Wrappers for the 6 new SQLite sources: fathersWrapper,
+    studyHelper.js        # Wrappers for the 6 new SQLite sources: fathersWrapper,
                           #   personsWrapper, placesWrapper, dictionaryWrapper, crossRefWrapper,
                           #   categoriesWrapper, commentaryWrapper. Also hosts book-name
                           #   conversion helpers (toTSKSourceBook, toCommentaryBookCodes, etc.)
     logger.js             # Custom logger (prefers console-based output with labels)
     filter.js             # Text filtering / sanitization
     splitString.js        # String chunking for Discord's embed description limit
-    axiosInterceptors.js  # (refactor) HTTP request/response interceptors
+    axiosInterceptors.js  # HTTP request/response interceptors
     sentryConfig.js       # Sentry options as a pure function of env (SENTRYDSN etc.)
     sentryScrub.js        # beforeSend / beforeBreadcrumb / beforeSendSpan privacy hooks
     errorReporting.js     # reportError(): one-line capture with area/handler/guild tags
@@ -61,9 +74,8 @@ src/
 
 data/                     # All files gitignored
   books.json              # Book-name aliases
-  bible.db, strongs.db    # Core Bible + lexicon SQLite DBs (present on both main and refactor)
-  prophecies.json, VOTD.json  # (refactor) Static datasets
-  # refactor-only:
+  bible.db, strongs.db    # Core Bible + lexicon SQLite DBs
+  prophecies.json, VOTD.json  # Static datasets
   lxx.sqlite                  # Brenton's English Septuagint (1851), keyed by
                               #   MASORETIC coords; built by src/buildLxx.js
   extrabiblical_data.sqlite   # Church Fathers commentary
@@ -74,19 +86,15 @@ data/                     # All files gitignored
   categories.sqlite           # Topical index
 ```
 
-**New commands on `refactor`**: `/fathers` (Early Church Fathers on a verse), `/persons` (biblical figure bio), `/places` (location + coordinates), `/profile` (Tyndale encyclopedic articles on people/groups/topics). These don't exist on `main`.
+**Commands added by the ESM rewrite** (once `refactor`-only, on `main` since 2026-09-25): `/fathers` (Early Church Fathers on a verse), `/persons` (biblical figure bio), `/places` (location + coordinates), `/profile` (Tyndale encyclopedic articles on people/groups/topics).
 
 ## Conventions used in this codebase
 
 ### Command file structure
 
-Each slash command is one file in `src/commands/`. Shape is the same on both branches, module system differs:
-
-- On `main`: CommonJS — `module.exports = { ... }`, `const { ... } = require('...')`
-- On `refactor`: ESM — `export default { ... }`, `import { ... } from '...'`. `package.json` has `"type": "module"`.
+Each slash command is one file in `src/commands/`. The codebase is ESM throughout (`"type": "module"` in `package.json`): `export default { ... }` and `import { ... } from '...'`, never `require`/`module.exports`. The CommonJS tree was the pre-2026-09-25 `main` and is gone from every live branch.
 
 ```js
-// refactor (ESM)
 export default {
   data: new SlashCommandBuilder().setName(...).setDescription(...),
   async execute(interaction, database) { ... }
@@ -247,10 +255,10 @@ they are ordered because two of them must happen BEFORE the restart.
 
 ## Known pitfalls
 
-- **`package.json` deps are branch-specific.** On `main`: 190+ bloated direct deps (accidentally pinned via `npm install --save`), with `eslint` in prod `dependencies` not `devDependencies`. On `refactor`: slimmed to 11 real direct deps + 1 devDep (see commit `647681e`). Don't touch package.json on `main` without planning the pnpm migration at the same time.
-- **Six different book-name conventions coexist across refactor's data sources.** Always sample `SELECT DISTINCT book FROM ...` before writing queries against an unfamiliar DB. The conventions: canonical (`"John"`, from `numbersToBook`), compact-lowercase (`"john"` — Church Fathers DB), compact-lowercase-with-variants (`"psalms"` AND `"psalm"` both exist in `extrabiblical_data.sqlite` — also stray cross-book ranges like `"Ephesians 2:2-Philippians"` in `categories.sqlite`), Roman-numeral source (`"I Samuel"` in TSK `source_book`), Arabic target (`"1 Samuel"` in TSK `target_book`), 3-letter OSIS-like uppercase (`"JHN"`, `"1SA"` in `clean_commentary.db`, with mixed-case alternates like `"Ezek"`, `"Phil"` for four books). Conversion helpers live in `src/utils/studyHelper.js`: `toTSKSourceBook`, `toCommentaryBookCodes`, `toCommentaryBookVariants`, `fromCommentaryBookCode`.
+- **Keep `package.json` slim.** The old CommonJS `main` had 190+ direct deps accidentally pinned via `npm install --save`, with `eslint` in prod `dependencies`; `647681e` cut that to the real direct deps plus one devDep, and that is the tree on `main` now. Add a dependency with `pnpm add`, which updates `pnpm-lock.yaml`, and commit the lockfile with it: prod installs `--frozen-lockfile`, so a `package.json` change without its lockfile fails the deploy.
+- **Six different book-name conventions coexist across the data sources.** Always sample `SELECT DISTINCT book FROM ...` before writing queries against an unfamiliar DB. The conventions: canonical (`"John"`, from `numbersToBook`), compact-lowercase (`"john"` — Church Fathers DB), compact-lowercase-with-variants (`"psalms"` AND `"psalm"` both exist in `extrabiblical_data.sqlite` — also stray cross-book ranges like `"Ephesians 2:2-Philippians"` in `categories.sqlite`), Roman-numeral source (`"I Samuel"` in TSK `source_book`), Arabic target (`"1 Samuel"` in TSK `target_book`), 3-letter OSIS-like uppercase (`"JHN"`, `"1SA"` in `clean_commentary.db`, with mixed-case alternates like `"Ezek"`, `"Phil"` for four books). Conversion helpers live in `src/utils/studyHelper.js`: `toTSKSourceBook`, `toCommentaryBookCodes`, `toCommentaryBookVariants`, `fromCommentaryBookCode`.
 - **Five books have one chapter, and citations omit it.** "Jude 5" means Jude 1:5 — likewise Obadiah, Philemon, 2 John and 3 John. Free text is handled: `parseScriptureRefs` remaps it, and so every consumer of that parser is covered. **Slash commands are not**, because they read `chapter` and `verse` as separate typed options and query directly without ever building a reference string. Any new command taking book/chapter/verse must call `resolveSingleChapterRef` (`src/utils/scriptureRefs.js`) after `bookId` resolves and before querying; ten already do. The rule is driven by impossibility, not preference — in a one-chapter book a number above 1 cannot be a chapter — which is why "Jude 1" alone is deliberately left as a chapter reference. **A range overrides even that**: "Obadiah 1-3" cannot be a chapter range, so a bare 1 before a dash is a verse. Getting that wrong showed the whole book to someone who asked for three verses (`9eadd0c`). The five books and their verse counts are derived from `bible.db` in `tests/singleChapterBooks.test.js`, including a scan over all 66 proving none is missing, so don't hand-edit that list.
-- **`@discordjs/builders` must be a direct dep under pnpm.** The bot's code imports it directly (e.g., `require('@discordjs/builders')` in command files), even though it's technically a transitive dep of `discord.js`. npm flattens everything so this works there; pnpm's strict mode doesn't. On `refactor`, it's been added to `package.json` dependencies explicitly.
+- **pnpm is strict about undeclared imports.** A package the code imports must be in `package.json` even when it is already a transitive dependency; npm's flat `node_modules` hid this, pnpm doesn't. `@discordjs/builders` was added as a direct dep for that reason when commands imported it; they now import from `discord.js`, so it is currently unused.
 - **`sqlite3` native build needs explicit approval under pnpm 10.** `package.json` must include `"pnpm": { "onlyBuiltDependencies": ["sqlite3"] }` or install will skip the postinstall script and leave you with a missing `.node` binding.
 - **`.DS_Store` files are tracked in the repo** at the root and `src/`. macOS regenerates them constantly, causing noisy diffs. If you modify the repo from a Mac, expect `.DS_Store` to show up as a local modification; don't commit changes to it.
 - **Node 22 in both places since 2026-09-25.** A machine coming from 18 must rebuild `sqlite3` against the new ABI (`pnpm rebuild sqlite3`). `@sentry/profiling-node` ships prebuilt binaries for darwin-arm64 and linux-x64-glibc on ABI 127, so nothing compiles; pnpm's "ignored build scripts" warning for `@sentry/node-cpu-profiler` is expected and harmless — its script only compiles when no prebuilt matches.
