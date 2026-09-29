@@ -13,7 +13,7 @@ set -euo pipefail
 [[ $EUID -eq 0 ]] || { echo "run as root" >&2; exit 1; }
 REF=${1:-refactor}
 APP=/srv/biblicana
-REPO=https://github.com/BlueBerean/Biblicana.git
+REPO=https://github.com/Lionmark-LLC/Biblicana.git
 
 install -d -m 750 -o biblicana -g biblicana "$APP"
 

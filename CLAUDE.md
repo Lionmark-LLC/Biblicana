@@ -4,9 +4,9 @@ Guidance for Claude Code sessions working in this repository.
 
 ## What this is
 
-**Biblicana** — a Node.js Discord bot for scripture lookups, commentary, cross-references, Bible dictionary, prophecies of Jesus, random verses, and more. Deployed in **~592 Discord servers** (2026-09-25, from the top.gg post at cutover; was 457 in April, 527 in July, 543 in August, 572 on 2026-09-06 — it grows, so re-check `/stats` rather than trusting this number). Live instance runs on DigitalOcean droplet `biblicana-bot-prod-2` (since 2026-09-25) under PM2, currently **v1.6.1 on the `refactor` branch**.
+**Biblicana** — a Node.js Discord bot for scripture lookups, commentary, cross-references, Bible dictionary, prophecies of Jesus, random verses, and more. Deployed in **~592 Discord servers** (2026-09-25, from the top.gg post at cutover; was 457 in April, 527 in July, 543 in August, 572 on 2026-09-06 — it grows, so re-check `/stats` rather than trusting this number). Live instance runs on DigitalOcean droplet `biblicana-bot-prod-2` (since 2026-09-25) under PM2, currently **v1.6.1 on the `main` branch** (moved from `refactor` on 2026-09-29, same commit).
 
-Repo owner: `BlueBerean` (brand GitHub account). Kenneth/`Nazareneism` is also a contributor.
+Repo owner: the `Lionmark-LLC` GitHub org (`Lionmark-LLC/Biblicana`, public) since 2026-09-25; it moved from `BlueBerean/Biblicana`, and the old URLs still redirect for web and git. `BlueBerean` remains the bot's brand GitHub account. Kenneth/`Nazareneism` is also a contributor.
 
 ## Tech stack
 
@@ -191,19 +191,23 @@ See `/Users/kenneth/Development/lionmark/discord-bot/BIBLICANA_OPS.md` for the f
 
 ### Testing changes
 
-All code changes should be tested with the test bot against the test server BEFORE deploying `refactor` to the droplet (`main` is not deployed). The prod bot is in ~570 Discord servers; breakage affects real users. The test bot token + test server ID are in local `.env`; the Neon `dev-local` branch is a sandbox copy-on-write clone of prod's database.
+All code changes should be tested with the test bot against the test server BEFORE deploying `main` to the droplet. The prod bot is in ~570 Discord servers; breakage affects real users. The test bot token + test server ID are in local `.env`; the Neon `dev-local` branch is a sandbox copy-on-write clone of prod's database.
 
 ### Deploying to prod
 
-Prod lives on droplet `biblicana-bot-prod-2` (Ubuntu 24.04, 1 vCPU / 2 GB, NYC3), reached **over the tailnet only** as `biblicana` — no public SSH, no root login, password auth off. The bot runs as user `biblicana` from `/srv/biblicana` under the systemd unit `pm2-biblicana`, started from `ecosystem.config.cjs` (which carries `--import ./src/instrument.js`, timestamps and log paths). Deployment flow:
-1. Push changes to `BlueBerean/Biblicana` on GitHub
+Prod lives on droplet `biblicana-bot-prod-2` (Ubuntu 24.04, 1 vCPU / 2 GB, NYC3), reached **over the tailnet only** as `biblicana` — no public SSH, no root login, password auth off. The bot runs as user `biblicana` from `/srv/biblicana` under the systemd unit `pm2-biblicana`, started from `ecosystem.config.cjs` (which carries `--import ./src/instrument.js`, timestamps and log paths). The droplet's checkout is on **`main`**.
+
+**Deploys through Peter (ops-platform), installed 2026-09-29.** Push to `main`, then Kenneth asks Peter to deploy that commit and approves by email. Peter's key reaches the droplet only as a forced command: `/usr/local/bin/biblicana-deploy` (root-owned, from `ops-platform/remote/biblicana-deploy.sh`), settings in `/etc/biblicana-deploy.conf`, key line in `~biblicana/.ssh/authorized_keys` restricted to ops' tailnet IP. It has two verbs, `status` and `deploy <40-hex sha>`. `deploy` accepts only commits already on `origin/main`, then does a `git reset --hard` to it, `pnpm install --frozen-lockfile`, a plain `pm2 restart index` (no `--update-env`, so the bot keeps its environment), and a 15 s health check. It never runs `deploy`/`deployg` and never touches `.env`. It **refuses** if the checkout isn't on `main` or has modified tracked files, so don't hand-edit files on prod or switch its branch. The first deploy through this path is pending (ops runs it through the approval flow).
+
+Manual deploy (fallback, same result):
+1. Push changes to `main` on `Lionmark-LLC/Biblicana` on GitHub (the droplet's `origin` still names the old `BlueBerean/Biblicana` URL until someone runs `git remote set-url origin https://github.com/Lionmark-LLC/Biblicana.git` there as `biblicana`; GitHub's redirect keeps `git pull` working meanwhile)
 2. `ssh kenneth@biblicana`
 3. `sudo -iu biblicana bash -c 'cd /srv/biblicana && git pull --ff-only'`
 4. If `pnpm-lock.yaml` changed: `sudo -iu biblicana bash -c 'cd /srv/biblicana && pnpm install --frozen-lockfile'`
 5. `sudo -iu biblicana pm2 restart index`
 6. `sudo tail -30 /var/log/biblicana/index-out.log` — every line is timestamped; expect `[Sentry] Enabled — environment=production` and `[Heartbeat] Started`. Anything else there means `.env` is wrong.
 
-**Rollback is in-branch:** `sudo -iu biblicana bash -c 'cd /srv/biblicana && git reset --hard <good-commit>'` + restart. Never `git checkout main`. The old droplet was snapshotted (`biblicana-bot-prod-final-2026-09-25`, DO > Images > Snapshots) and destroyed on 2026-09-25; restoring that snapshot to a new droplet (~10 min) is the only way back to the old host, and should never be needed. If a prod-token bot ever runs in two places, both answer every event.
+**Rollback is in-branch:** `sudo -iu biblicana bash -c 'cd /srv/biblicana && git reset --hard <good-commit>'` + restart. Through Peter, a rollback is `deploy <good-commit>` (any commit already on `main`; each successful deploy prints its own rollback sha). Don't switch the droplet's branch as part of a rollback: prod tracks `main`, and the deploy gate refuses any other branch. The old droplet was snapshotted (`biblicana-bot-prod-final-2026-09-25`, DO > Images > Snapshots) and destroyed on 2026-09-25; restoring that snapshot to a new droplet (~10 min) is the only way back to the old host, and should never be needed. If a prod-token bot ever runs in two places, both answer every event.
 
 ### Release checklist (version bumps only)
 
@@ -260,8 +264,8 @@ they are ordered because two of them must happen BEFORE the restart.
 
 ## Branches
 
-- **`refactor` — what prod actually runs**, and has since the v1.5.0 migration on 2026-06-30. This is the working branch: deploys are a `git pull` on the droplet from `refactor`. ESM, 11 real deps, 0 critical Dependabot alerts on its own tree. `/dictionary`, `/crossref`, `/topicalindex` and `/commentary` are local SQLite rather than RapidAPI; `/fathers`, `/persons`, `/places` and `/profile` were added. 34 command files, 33 registered globally (`/testwelcome` is `devOnly`). `/lxx` is the newest and, unlike a component, needed a `deployg`.
-- **`main` — stale, NOT deployed.** CommonJS, 190+ deps, 100+ open Dependabot vulnerabilities. Left behind by the refactor and increasingly divergent. **Do not push here**, and do not treat it as production — several docs (including older revisions of this file) wrongly said it was.
+- **`main` — the working and deploy branch since 2026-09-29.** Prod's checkout moved from `refactor` to `main` that day at the same commit (`09d1e5e`, no code change), done with `git checkout -B main --track origin/main` rather than checking out the droplet's stale local `main` (`bf20673`) and pulling, which would have put the 2024 tree on disk under the running bot for a moment. Push to `main` only; the deploy gate deploys only commits on `origin/main`. ESM, 11 real deps, 0 critical Dependabot alerts on its own tree. `/dictionary`, `/crossref`, `/topicalindex` and `/commentary` are local SQLite rather than RapidAPI; `/fathers`, `/persons`, `/places` and `/profile` were added. 34 command files, 33 registered globally (`/testwelcome` is `devOnly`). `/lxx` is the newest and, unlike a component, needed a `deployg`.
+- **`refactor` — retired as the deploy branch 2026-09-29.** It was prod's branch from the v1.5.0 migration (2026-06-30) until then; `main` was fast-forwarded to it on 2026-09-25 (`bf20673..2920248`, 119 commits, nothing rewritten), and the two were kept identical until the switch. Pushing to `refactor` (and `git push origin refactor:main`) is no longer part of the flow. The branch still exists on GitHub and as a local branch on the droplet, both at `09d1e5e`; deleting it is Kenneth's call.
 
 ### Release history
 
@@ -321,6 +325,6 @@ they are ordered because two of them must happen BEFORE the restart.
 - **BIBLICANA_OPS.md** (at `../BIBLICANA_OPS.md`, outside this repo) — private ops doc covering DigitalOcean droplets, Neon setup, credentials, SSH access, and the session history of how the environment was bootstrapped. Start here if you need to recover infrastructure state.
 - **`project_log.md`** — reverse-chronological log of changes, incidents and decisions, started 2026-09-24 and seeded back to v1.4.0. Add an entry after significant work.
 - **Sentry**: https://lionmark.sentry.io — project `biblicana` (issues, traces, the `biblicana-gateway` cron monitor)
-- **Upstream**: https://github.com/BlueBerean/Biblicana
+- **Upstream**: https://github.com/Lionmark-LLC/Biblicana
 - **Discord dev portal**: https://discord.com/developers/applications (both prod and test bot apps owned by Kenneth)
 - **Neon console**: https://console.neon.tech — `Biblicana` project holds the live Postgres; `dev-local` branch is the dev sandbox
