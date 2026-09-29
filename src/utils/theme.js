@@ -9,8 +9,9 @@ const DEFAULT_FOOTER = 'Biblicana';
 // reads from one source of truth. Intentionally NOT used in message footers —
 // Discord's hyperlink styling clashes with the bot's accent color, so legal
 // links live only in the dedicated panels above.
-export const PRIVACY_URL = 'https://blueberean.com/privacy';
-export const TERMS_URL = 'https://blueberean.com/terms';
+// www is canonical: the apex 301s to it (Cloudflare, since 2026-09-29).
+export const PRIVACY_URL = 'https://www.blueberean.com/privacy';
+export const TERMS_URL = 'https://www.blueberean.com/terms';
 export const SUPPORT_INVITE = 'https://discord.gg/uwFz5vQE';
 
 export function accentColor() {

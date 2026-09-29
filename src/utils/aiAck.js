@@ -48,7 +48,12 @@ import logger from './logger.js';
 //     only, and now may cause an outbound search. Same processor, new
 //     processing activity, and the Art. 6(1)(a) consent basis leans on the
 //     disclosure being accurate about what actually happens.
-export const TERMS_MIN_ACK_DATE = '2026-08-03T00:00:00.000Z';
+//   2026-09-29 — v3: Privacy Policy now discloses Sentry (bot error reports,
+//     traces and profiles, sending since 2026-09-25) and Cloudflare as the
+//     website host in place of Vercel. Sentry is a new processor, which is
+//     material; the host swap alone would not have been. Policy went live
+//     via blueberean-site@5f28424.
+export const TERMS_MIN_ACK_DATE = '2026-09-29T00:00:00.000Z';
 
 /**
  * Check whether the user has a valid ack for the current Terms version.
