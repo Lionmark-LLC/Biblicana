@@ -23,9 +23,11 @@ data/.DS_Store
 FOLLOWUPS.md
 
 # Agent tooling installed locally by `npx neon@latest init` (2026-08-10).
-# Machine-local artifacts, not project source — each dev regenerates them.
-# .neon holds only {"_init":{"features":[...]}}, no credentials, but it is
-# still per-machine binding state.
+# Kenneth's copies were REMOVED 2026-09-29 and should not be reinstalled: the
+# Neon skills tell an agent to use DATABASE_URL and to run `neon env pull` /
+# `link` / `checkout`, which write .env. This code reads PGHOST/PGUSER/
+# PGPASSWORD/PGDATABASE (src/config.js), and agents must not write .env.
+# Still ignored so a re-init can never be committed.
 .neon
 .agents/
 .claude/skills/

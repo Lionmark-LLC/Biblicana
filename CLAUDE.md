@@ -19,6 +19,7 @@ Binding on every Claude session in this repo, and written for ops-platform's bui
 - **Never read logs**, local or prod, and never ask for them to be pasted. Prod logs carry AI-chat excerpts from real users, and `DEBUG_AICHAT_RAG=1` logs full prompts with message history. Diagnose from code, tests and Sentry's scrubbed issues instead.
 - **Never toggle the MessageContent intent** or change any setting in the Discord developer portal. MessageContent is a privileged intent that took about two months of review to get (approved 2026-06-18); passive detection and AI chat depend on it, and switching it off can mean a fresh review.
 - **Never read `.env*`, never `ssh`/`scp`, never deploy the website** (`wrangler`, `vercel`). `.claude/settings.json` denies these; treat the denies as a statement of intent, not the only barrier.
+- **Postgres config is `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`** (`src/config.js`), not `DATABASE_URL`. Don't install Neon's agent skills (`npx neon init`, `npx skills add neondatabase/...`): they assume `DATABASE_URL` and run `neon env pull`, which rewrites `.env`.
 - **Verify with the test suite:** `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run lint`, on Node 22. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
 
 ## Tech stack
