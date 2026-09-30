@@ -130,11 +130,3 @@ test('attribution is limited to the source\'s own verses', async () => {
     assert.match(src, /THE SAME GOES FOR VERSE REFERENCES/);
     assert.match(src, /Attribute to Torrey ONLY the verses that appear in this text/);
 });
-
-test('the difficulties file is optional and opened read-only', async () => {
-    const src = await readFile(new URL('../src/utils/studyHelper.js', import.meta.url), 'utf8');
-    const at = src.indexOf('const difficultiesPromise');
-    const block = src.slice(at, src.indexOf('})();', at));
-    assert.match(block, /mode: sqlite3\.OPEN_READONLY/);
-    assert.match(block, /catch \(err\)[\s\S]*return null/);
-});

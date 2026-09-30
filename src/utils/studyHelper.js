@@ -1,73 +1,23 @@
-import { fileURLToPath } from 'node:url';
-import path, { dirname } from 'node:path';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import { toTSKSource, getBookId } from './bookNames.js';
-import logger from './logger.js';
+import { openRequired, openOptional } from './dataFiles.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const fathersPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'extrabiblical_data.sqlite');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const personPlacesPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'person_places.db');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const dictionaryPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'dictionary.sqlite');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const crossRefPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'cross-references.sqlite');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const categoriesPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'categories.sqlite');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const commentaryPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'clean_commentary.db');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
-
-const lxxPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'lxx.sqlite');
-    return open({ filename: filePath, driver: sqlite3.Database, readOnly: true });
-})();
+const fathersPromise = openRequired('extrabiblical_data.sqlite');
+const personPlacesPromise = openRequired('person_places.db');
+const dictionaryPromise = openRequired('dictionary.sqlite');
+const crossRefPromise = openRequired('cross-references.sqlite');
+const categoriesPromise = openRequired('categories.sqlite');
+const commentaryPromise = openRequired('clean_commentary.db');
+const lxxPromise = openRequired('lxx.sqlite');
 
 // OPTIONAL, unlike every file above: resolves to null when absent. Footnotes
 // enrich AI grounding; they must never be the reason the bot fails to start,
 // and a data file lands on the droplet by scp, separately from the git pull
-// that ships this code. A rejected promise at import time would be an
-// unhandled rejection, which kills a Node 18 process.
-const bsbFootnotesPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'bsb_footnotes.sqlite');
-    try {
-        return await open({ filename: filePath, driver: sqlite3.Database, mode: sqlite3.OPEN_READONLY });
-    } catch (err) {
-        logger.warn(`[BsbFootnotes] data/bsb_footnotes.sqlite unavailable (${err.message}) - grounding will omit BSB footnotes`);
-        return null;
-    }
-})();
+// that ships this code.
+const bsbFootnotesPromise = openOptional('bsb_footnotes.sqlite', 'grounding will omit BSB footnotes');
 
 // Optional for the same reason: Haley's "Alleged Discrepancies" (1874), built by
 // src/buildDifficulties.js. Absent, grounding and lookup_difficulty go without.
-const difficultiesPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'difficulties.sqlite');
-    try {
-        return await open({ filename: filePath, driver: sqlite3.Database, mode: sqlite3.OPEN_READONLY });
-    } catch (err) {
-        logger.warn(`[Difficulties] data/difficulties.sqlite unavailable (${err.message}) - Haley will not be consulted`);
-        return null;
-    }
-})();
+const difficultiesPromise = openOptional('difficulties.sqlite', 'Haley and Torrey will not be consulted');
 
 export const COMMENTATORS = [
     { id: 'john-gill',              label: "John Gill" },

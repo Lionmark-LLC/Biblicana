@@ -1,10 +1,5 @@
-import { fileURLToPath } from 'node:url';
-import path, { dirname } from 'node:path';
-import sqlite3 from 'sqlite3';
-import { open } from 'sqlite';
 import logger from './logger.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { openRequired } from './dataFiles.js';
 
 const numSuperMap = new Map([
     [0, '⁰'], [1, '¹'], [2, '²'], [3, '³'], [4, '⁴'],
@@ -24,23 +19,8 @@ export const numberToSuperScript = (number) => {
     return superScript;
 };
 
-const biblePromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'bible.db');
-    return open({
-        filename: filePath,
-        driver: sqlite3.Database,
-        readOnly: true
-    });
-})();
-
-const strongsPromise = (async () => {
-    const filePath = path.join(__dirname, '../..', 'data', 'strongs.db');
-    return open({
-        filename: filePath,
-        driver: sqlite3.Database,
-        readOnly: true
-    });
-})();
+const biblePromise = openRequired('bible.db');
+const strongsPromise = openRequired('strongs.db');
 
 class BibleWrapper {
     constructor() {
