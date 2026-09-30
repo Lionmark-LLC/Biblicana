@@ -5,6 +5,7 @@
 //
 // NOTE: test names stay ASCII (see the note in heartbeat.test.js).
 
+import './helpers/fixtureData.js'; // imports the data wrappers indirectly
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

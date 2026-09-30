@@ -5,6 +5,7 @@
 // plus a line of Greek - named no English reference, so it got NO grounding at
 // all, on exactly the turn under most pressure. ragSourceText falls back to the
 // most recent earlier USER turn that cites a verse.
+import './helpers/fixtureData.js'; // imports the data wrappers indirectly
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ragSourceText } from '../src/utils/aiChat.js';
