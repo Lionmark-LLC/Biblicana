@@ -6,6 +6,16 @@ Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md
 
 ## 2026-09-29
 
+### Test suite self-contained; data files open read-only for real
+
+For the builder agent, which has no data files: in a fresh clone **64 tests failed across 10 files**, not the 7 the handoff listed (`difficulties`, `studyHelper` and `errorReporting` too). The run also **created eight empty databases in `data/`**, the `readOnly: true` bug at work. Commits `1ec84c1`, `a9e2bb3`, `2a31a65`, `95194a8`, docs after. **Tests 392 -> 396; a fresh clone now passes 393 with 3 skipped, nothing written to `data/`**, and lint is clean. No deploy.
+
+- **`/stats` and the bias button crashed without `EMBEDFOOTERTEXT`** (`1ec84c1`). `setFooter({ text: undefined })` is rejected by discord.js, and the `/stats` error-reporting tests only passed because this Mac's `.env` sets the variable. `theme.js` now has a `footerText()` fallback.
+- **Read-only fix** (`a9e2bb3`): the new `src/utils/dataFiles.js` is the one place data files open, always `OPEN_READONLY`. A missing required file rejects naming the file, and the rejection is observed at import, so the process survives. Mutation-checked: putting `readOnly: true` back fails 4 of the 5 new tests, and in doing so it really did empty the fixture's `english` table through the "read-only" handle, which is the bug shown live (the fixture was rebuilt).
+- **Fixtures** (`2a31a65`): 11 files, about 1 MB, built reproducibly (byte-identical on rebuild) by `tests/fixtures/buildFixtures.js`. The slices came from tracing all 278 queries the tests make, then widening them so negative assertions keep their teeth. Reintroducing the original `LIKE` bug (unescaped `the_%`) still fails on the fixture. **Copyright:** the repo is public and `bible.db` carries NASB, NKJV and AMPC. Those columns are NULL. Modern Fathers, the commentaries and Theographic descriptions keep keys with placeholder text. A byte search of the fixtures found none of the redacted strings.
+- **Needs the real files** (`*.full.test.js`, skipped without them): the three keyword-search tests over Haley/Torrey, because the ranking is IDF over all 664 entries.
+- **Not changed, for Kenneth to decide:** Neon keeps 24 h of restore history on the Biblicana project (`history_retention_seconds` 86400, confirmed by the API the same day), while the Privacy Policy says 6 hours. Fix the policy or the setting; nothing was changed.
+
 ### Repo refuses prod before a builder agent exists
 
 ops-platform is adding a builder agent for this repo (Stephen: Claude Code in a container, PRs only). Nothing in the repo refused prod: `src/deploy.js --global --rm` empties every prod slash command and `src/pruneGuildData.js --apply` deletes guild rows, both acting on whatever `.env` says. Six scoped commits on `main`, none deployed (nothing here changes the running bot):

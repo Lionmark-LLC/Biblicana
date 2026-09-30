@@ -20,7 +20,7 @@ Binding on every Claude session in this repo, and written for ops-platform's bui
 - **Never toggle the MessageContent intent** or change any setting in the Discord developer portal. MessageContent is a privileged intent that took about two months of review to get (approved 2026-06-18); passive detection and AI chat depend on it, and switching it off can mean a fresh review.
 - **Never read `.env*`, never `ssh`/`scp`, never deploy the website** (`wrangler`, `vercel`). `.claude/settings.json` denies these; treat the denies as a statement of intent, not the only barrier.
 - **Postgres config is `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`** (`src/config.js`), not `DATABASE_URL`. Don't install Neon's agent skills (`npx neon init`, `npx skills add neondatabase/...`): they assume `DATABASE_URL` and run `neon env pull`, which rewrites `.env`.
-- **Verify with the test suite:** `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run lint`, on Node 22. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
+- **Verify with the test suite:** `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run lint`, on Node 22. It needs no data files: tests read the committed fixtures in `tests/fixtures/data`, and the few that need a whole real file (`*.full.test.js`) skip with a reason. A skip is expected in a container; a failure is not. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
 
 ## Tech stack
 
@@ -120,6 +120,8 @@ All env var names are UPPERCASE, **no underscores**. Examples: `DISCORDTOKEN`, `
 
 `TOPGGTOKEN` is **optional** and prod-only: it posts the guild count to top.gg, which does NOT read that number from Discord — a bot that never posts shows no server count at all, which is why Biblicana's listing was blank while it sat in 500+ servers. Absent token is a normal state (the test bot has no listing), so `startTopggPoster` returns null and logs once at debug rather than warning every 30 minutes. Token comes from `top.gg/bot/<BOT_ID>/webhooks`, and top.gg wants it **bare** in the `Authorization` header — a `Bearer` prefix is rejected, and the only symptom is a listing that silently never updates.
 
+`BIBLICANADATADIR` is **test-only**: it moves where `src/utils/dataFiles.js` looks for the SQLite files (default `data/`), and `tests/helpers/fixtureData.js` sets it to the fixtures. Never set it in a real `.env`: prod would open the 1 MB fixtures and answer from a few hundred verses.
+
 The Sentry vars, all optional (read in `src/utils/sentryConfig.js`):
 
 | Var | Default | Notes |
@@ -204,6 +206,8 @@ See `/Users/kenneth/Development/lionmark/discord-bot/BIBLICANA_OPS.md` for the f
 
 ### Testing changes
 
+**The suite is self-contained (2026-09-29).** Tests that read Bible or reference data import `tests/helpers/fixtureData.js` first, which sets `BIBLICANADATADIR` to `tests/fixtures/data`: about 1 MB of extracts of the real files, built reproducibly by `tests/fixtures/buildFixtures.js` (`tests/fixtures/README.md` says what each file keeps and why). A new test that needs rows the fixtures lack fails; add the slice to the builder and rebuild where the real files are. Don't hand-edit a fixture. The repo is public, so fixtures keep only public-domain text: never add NASB, NKJV, AMPC, modern Fathers, commentary or Theographic text. A test whose meaning depends on a WHOLE file (keyword search ranks by IDF over the entire Haley/Torrey corpus) goes in a `*.full.test.js` that skips when `data/<file>` is absent and imports nothing then. Keep negative assertions honest: a fixture must contain the rows a test rules out (Theophilus is in `persons` for the `LIKE`-escape test).
+
 All code changes should be tested with the test bot against the test server BEFORE deploying `main` to the droplet. The prod bot is in ~570 Discord servers; breakage affects real users. The test bot token + test server ID are in local `.env`; the Neon `dev-local` branch is a sandbox copy-on-write clone of prod's database.
 
 ### Deploying to prod
@@ -247,8 +251,11 @@ they are ordered because two of them must happen BEFORE the restart.
    `customId` at interaction time and need nothing but a restart. Global
    registration takes up to an hour to propagate; it is a `PUT` over the whole
    set, so it cannot duplicate.
-5. **Run the tests on the droplet before restarting**, as `biblicana`, against
-   prod's data: `sudo -iu biblicana bash -c 'cd /srv/biblicana && node --test tests/*.test.js 2>&1 | tail -8'`.
+5. **Run the tests on the droplet before restarting**, as `biblicana`: `sudo -iu biblicana bash -c 'cd /srv/biblicana && node --test tests/*.test.js 2>&1 | tail -8'`.
+   Since 2026-09-29 most tests read the committed fixtures, so this checks the CODE on
+   prod's Node and native modules, not prod's data files. Only `*.full.test.js` read
+   prod's real files, and they should show as passed there, not skipped. Prod's data is
+   checked by step 6's real query.
    (History: prod's old Node 18.13 TAP lexer reported per FILE and died on
    non-ASCII test names; hence the per-subtest count habit and the ASCII rule.)
 6. Restart, then verify with a real query against prod's own data — not just a
@@ -272,7 +279,7 @@ they are ordered because two of them must happen BEFORE the restart.
 - **The "Church Fathers" DB is not all Church Fathers.** `extrabiblical_data.sqlite` holds 334 authors: 285 patristic, plus 49 medieval, Reformation-era and modern writers (Aquinas, C.S. Lewis, Tolkien, at least one living author). Anything surfacing these rows must classify by `default_year` — `classifyFather` for model-facing text, `fatherEraBadge` for UI, both in `studyHelper.js`. Presenting a 1963 author as "the early church" is a factual error, and the two helpers are tested to never disagree.
 - **Test names must be ASCII.** Prod's Node 18.13 TAP lexer dies on a non-ASCII character in a `test()` description and reports the whole FILE as 0 passed, naming nothing. Local Node 18.20 parses it fine, so it only shows up on the droplet. Em-dashes are fine in comments, assertions and log lines — just not in test titles. Kept after the move to Node 22 (both places, 2026-09-25): it costs nothing.
 - **The OLD droplet had 1 vCPU and 952 MB of RAM, against ~700 MB of SQLite** (the current one has 2 GB: ~1.4 GB free for page cache at cutover, against ~390 MB before). SQLite has no buffer pool of its own and leans entirely on the kernel page cache, so when free memory is squeezed every query becomes a real disk read. On 2026-09-05 that put load at 13 with CPU near idle and `ps` hanging for 100+ seconds, while `pm2 list` still reported the bot healthy and `online` — there were no OOM kills, because the bot was starved, not killed. Diagnose with `free -m` (watch `available` and `buff/cache`) and load-vs-CPU divergence, NOT the bot's logs. A 2 GB swapfile and a masked `fwupd` bought the headroom back, and the 2026-09-25 migration to 2 GB is the durable fix. The diagnosis still holds on any size: page cache, not the bot, is what SQLite runs on.
-- **`readOnly: true` does nothing.** Every wrapper in `studyHelper.js` except `bsbFootnotesWrapper` and `difficultiesWrapper` opens its SQLite with `open({ ..., readOnly: true })`, but the `sqlite` package reads only `mode`. They actually open READ-WRITE with CREATE, so a missing data file is not an error at startup — it is silently created empty, and the first query fails with "no such table". Use `mode: sqlite3.OPEN_READONLY` in anything new; `tests/bsbFootnotes.test.js` and `tests/difficulties.test.js` pin it for the two that do.
+- **Open data files only through `src/utils/dataFiles.js`.** Until 2026-09-29 the wrappers passed `readOnly: true`, which the `sqlite` package ignores (it reads only `mode`), so they opened READ-WRITE with CREATE: a missing file was silently created empty and failed later as "no such table", and a fresh clone running the tests left eight empty databases in `data/`. `openRequired` now opens `OPEN_READONLY` and rejects naming the missing file. It observes its own rejection at import, so one missing file fails its own queries without killing the bot. `openOptional` resolves null for the two optional files. `tests/dataFiles.test.js` proves none of this creates a file, and scans `src/` so nothing else opens SQLite (the offline `src/build*.js` are exempt).
 - **The interlinear's English glosses are the KJV's, supplied italic words included**, attached to the nearest original word. In 2 Sam 21:19 "the brother of Goliath" is glossed onto the Hebrew for Goliath alone — there is no H251 ("brother") in the verse. Anything reading `interlinear.data` must treat the Hebrew/Greek word list as the text and the glosses as a KJV rendering of it; `lookup_original` says so on every success path.
 - **Haley and Torrey are keyed differently, on purpose.** Haley's references are marked PRIMARY (the pair a case reconciles) or passing; automatic grounding uses primary only, because Haley cites ~2,500 verses in passing and grounding on those would attach an unrelated digression to much of the Old Testament. Torrey is ALL non-primary and reached only through `lookup_difficulty`'s keyword search — an essay citing Deut 20:16 is not about Deut 20:16. A Torrey hit returns its CHAPTER in order (up to 4,500 chars, windowed and marked beyond that), because the chunking is ours and one chunk is an argument without its conclusion.
 - **Neon bills compute-time, not queries.** Anything polling on a timer shorter than the ~5-minute autosuspend threshold keeps the endpoint awake permanently, regardless of how few queries it makes. The daily-verse tick did exactly this from 2026-06-30 to 2026-08-01. Cache timer-driven reads in Redis and invalidate on write; see `getDailyVerseGuilds`.
