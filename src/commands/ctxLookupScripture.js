@@ -7,9 +7,11 @@ import {
     TextDisplayBuilder,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
+import { getVersification } from '../utils/versification.js';
 import { renderBibleEphemeral } from '../utils/bibleRenderer.js';
 import { respondToInteraction } from '../utils/paginationHelper.js';
 import logger from '../utils/logger.js';
+import { reportError } from '../utils/errorReporting.js';
 
 // Message context-menu: right-click any message → Apps → "Look up scripture".
 // Parses scripture references from the targeted message's content and shows
@@ -39,8 +41,17 @@ export default {
             });
         }
 
+        const versification = await getVersification();
+        const validRefs = versification.filter(refs);
+        if (validRefs.length === 0) {
+            return interaction.reply({
+                content: '🔍 No valid scripture references found in that message.',
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+
         // ACK FIRST. Everything above is synchronous (string assembly + regex
-        // parse), so this is the last point before I/O — a user preference read
+        // parse + versification filter), so this is the last point before I/O — a user preference read
         // followed by a verse fetch. Deferred flags must match what
         // renderBibleEphemeral ultimately sends, since the response shape is
         // locked here and V2/content are mutually exclusive.
@@ -48,7 +59,7 @@ export default {
 
         // Pick the first ref with a concrete verse; fall back to the first ref
         // at all (chapter-only). renderBibleEphemeral handles both.
-        const ref = refs.find(r => r.startVerse != null) ?? refs[0];
+        const ref = validRefs.find(r => r.startVerse != null) ?? validRefs[0];
 
         let translation = 'BSB';
         try {
@@ -66,14 +77,15 @@ export default {
                 translation,
             });
 
-            if (refs.length > 1) {
-                const extras = refs.slice(1, 4).map(r => r.raw).join(', ');
+            if (validRefs.length > 1) {
+                const extras = validRefs.slice(1, 4).map(r => r.raw).join(', ');
                 await interaction.followUp({
-                    content: `-# Also found in that message: ${extras}${refs.length > 4 ? ` (+${refs.length - 4} more)` : ''} — right-click again or use \`/bible\` to look them up.`,
+                    content: `-# Also found in that message: ${extras}${validRefs.length > 4 ? ` (+${validRefs.length - 4} more)` : ''} — right-click again or use \`/bible\` to look them up.`,
                     flags: MessageFlags.Ephemeral,
                 });
             }
         } catch (err) {
+            reportError(err, { area: 'command', handler: 'ctxLookupScripture' });
             logger.error(`[CtxLookup] Render failed: ${err.message}`);
             // The old `!interaction.replied` guard is wrong now that we defer:
             // after deferReply, `replied` is false but `deferred` is true, so a

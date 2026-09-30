@@ -11,6 +11,7 @@ import {
     MessageFlags,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
+import { getVersification } from '../utils/versification.js';
 import { toOSIS3Codes } from '../utils/bookNames.js';
 import { commentaryWrapper, COMMENTATORS } from '../utils/studyHelper.js';
 import { accentColor, footerLine } from '../utils/theme.js';
@@ -39,10 +40,12 @@ export default {
         ].join(' ');
 
         const refs = parseScriptureRefs(searchText);
-        const verseRef = refs.find(r => r.startVerse != null);
+        const versification = await getVersification();
+        const validRefs = versification.filter(refs);
+        const verseRef = validRefs.find(r => r.startVerse != null);
         if (!verseRef) {
             return interaction.reply({
-                content: '🔍 Need a verse-level reference (like "Rom. 8:28") to look up commentary. That message has none I could parse.',
+                content: '🔍 Need a valid verse-level reference (like "Rom. 8:28") to look up commentary. That message has none I could parse.',
                 flags: MessageFlags.Ephemeral,
             });
         }
