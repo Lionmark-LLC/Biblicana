@@ -4,6 +4,12 @@ Reverse-chronological log of significant changes, incidents and decisions. **New
 
 Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md`'s release history, `FOLLOWUPS.md` (gitignored, local), the Claude memory files, and `git log`. Entries before 2026-09-24 are summaries; the detail lives in those sources, named per entry. Dates are when a change was made or deployed, as stated; where two sources disagree, both are given.
 
+## 2026-09-30
+
+### Context-menu commands say why a reference does not exist
+
+After PR #1 the three message context-menu commands (Look up scripture, Show commentary, Show interlinear) refused "Romans 17:1" with a generic line, while the 📖 reaction on the same message explained it. When a message has references and none exists, all three now reply with the reaction's line ("Romans has 16 chapters, so there is no Romans 17.", Psalm 151 pointed at the Septuagint), explaining the first verse-level reference, else the first. The check still runs before the defer and stays synchronous. `missingReferenceLine` moved from `src/events/messageReactionAdd.js` to `src/utils/versification.js` so commands don't import an event handler; the reaction's reply is unchanged. Messages with no references, and Show commentary/interlinear on an existing chapter-only reference, keep their old replies. New `tests/contextMenuMissing.test.js` drives each `execute()` with a fake interaction; 13 of its 17 tests fail on the old commands. **Tests 396 -> 413** (410 pass, 3 skipped). Branch `agent/stephen/ctx-menu-missing-refs` (LIO-22); not deployed, no command re-registration needed (names and types unchanged).
+
 ## 2026-09-29
 
 ### Test suite self-contained; data files open read-only for real

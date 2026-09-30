@@ -7,7 +7,7 @@ import {
     TextDisplayBuilder,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
-import { getVersification } from '../utils/versification.js';
+import { getVersification, missingReferenceLine } from '../utils/versification.js';
 import { renderInterlinearEphemeral } from '../utils/interlinearRenderer.js';
 import { respondToInteraction } from '../utils/paginationHelper.js';
 import logger from '../utils/logger.js';
@@ -34,6 +34,15 @@ export default {
         const versification = await getVersification();
         const validRefs = versification.filter(refs);
         const verseRef = validRefs.find(r => r.startVerse != null);
+        if (refs.length > 0 && validRefs.length === 0) {
+            // Every reference parsed but none exists ("Romans 17:1"): say why,
+            // the way the 📖 reaction does. describeMissing is synchronous.
+            const missing = refs.find(r => r.startVerse != null) ?? refs[0];
+            return interaction.reply({
+                content: `🔍 ${missingReferenceLine(versification, missing)}`,
+                flags: MessageFlags.Ephemeral,
+            });
+        }
         if (!verseRef) {
             return interaction.reply({
                 content: '🔍 Need a valid verse-level reference (like "John 3:16") for an interlinear view. That message has none I could parse.',

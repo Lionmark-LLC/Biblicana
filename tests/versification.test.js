@@ -12,9 +12,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import log from 'loglevel';
 log.setLevel('error');
-const { getVersification, makeChecker } = await import('../src/utils/versification.js');
+const { getVersification, makeChecker, missingReferenceLine } = await import('../src/utils/versification.js');
 const { parseScriptureRefs } = await import('../src/utils/scriptureRefs.js');
-const { missingReferenceLine } = await import('../src/events/messageReactionAdd.js');
 
 const v = await getVersification();
 const ref = s => parseScriptureRefs(s)[0];
