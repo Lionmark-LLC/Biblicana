@@ -1,12 +1,12 @@
-import fs from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import 'dotenv/config';
 import { Routes, REST } from 'discord.js';
 import yargs from 'yargs/yargs';
 import { hideBin } from 'yargs/helpers';
 import logger from './utils/logger.js';
 import { refuseProdUnlessAllowed } from './utils/prodGuard.js';
+import { loadCommands } from './utils/loadCommands.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -31,31 +31,22 @@ const argv = yargs(hideBin(process.argv))
     .alias('help', 'h')
     .parse();
 
-const commands = [];
-const commandsPath = path.join(__dirname, 'commands');
-const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
+const { commands, failures, skipped } = await loadCommands(path.join(__dirname, 'commands'), { global: Boolean(argv.global) });
 
-// Dynamically import each command module (ESM uses async import)
-for (const file of commandFiles) {
-    const filePath = path.join(commandsPath, file);
-    try {
-        const moduleExports = await import(pathToFileURL(filePath).href);
-        const command = moduleExports.default;
-        if (command?.data?.toJSON) {
-            // Dev-only commands (e.g. /testwelcome) must never enter the GLOBAL
-            // (production) registry — they'd surface in the picker across all
-            // 512 servers. They may still register to the dev guild for testing.
-            if (command.devOnly && argv.global) {
-                logger.info(`[Deploy] Skipping dev-only command '${file}' in global scope.`);
-                continue;
-            }
-            commands.push(command.data.toJSON());
-        } else {
-            logger.warn(`[WARNING] Command at ${file} is missing 'data' or 'data.toJSON' method.`);
-        }
-    } catch (error) {
-        logger.error(`Error loading command at ${filePath}:`, error);
+for (const file of skipped) {
+    logger.info(`[Deploy] Skipping dev-only command '${file}' in global scope.`);
+}
+
+// A deploy REPLACES the whole set: a command that failed to load would be
+// deleted from every server, not left as it was. Upload nothing instead.
+if (failures.length) {
+    for (const f of failures) {
+        logger.error(`[Deploy] Failed to load src/commands/${f.file}: ${f.reason}`);
+        if (f.error?.stack) logger.debug(f.error.stack);
     }
+    logger.error(`[Deploy] Refusing to upload: ${failures.length} command file(s) failed to load (${failures.map(f => f.file).join(', ')}). ` +
+        'Uploading the rest would remove the failed command(s) from Discord. Nothing was changed.');
+    process.exit(1);
 }
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORDTOKEN);
