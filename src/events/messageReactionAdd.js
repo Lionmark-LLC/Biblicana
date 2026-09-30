@@ -11,7 +11,7 @@ import {
     MessageFlags,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
-import { getVersification } from '../utils/versification.js';
+import { getVersification, missingReferenceLine } from '../utils/versification.js';
 import { bibleWrapper } from '../utils/bibleHelper.js';
 import { toCommentaryVariants, toOSIS3Codes } from '../utils/bookNames.js';
 import { fathersWrapper, crossRefWrapper, commentaryWrapper, pickMarqueeFather } from '../utils/studyHelper.js';
@@ -144,18 +144,6 @@ async function fetchExpansionData(ref, translation) {
 // gives each option its own 100-char value, so this stays stateless.
 export function reactionRefValue(ref) {
     return `${ref.bookId}:${ref.chapter}:${ref.startVerse ?? 0}:${ref.endVerse ?? 0}`;
-}
-
-// Psalm 151 is the one missing chapter people are likely to mean on purpose:
-// it is real, it is in the Septuagint, and it is not in the Hebrew canon.
-// Deliberately does NOT point at /lxx - neither /lxx nor lookup_lxx can reach
-// it yet, since its rows have no Masoretic address to look it up by.
-export function missingReferenceLine(versification, ref) {
-    const why = versification.describeMissing(ref) ?? `I couldn't find ${refLabel(ref)}.`;
-    if (ref.bookId === 19 && ref.chapter === 151) {
-        return `${why} Psalm 151 is found in the Septuagint, not in the Hebrew Psalter.`;
-    }
-    return why;
 }
 
 export async function buildExpansionReply(ref, translation, siblings = []) {

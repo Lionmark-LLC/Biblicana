@@ -95,8 +95,9 @@ export function makeChecker(table) {
         },
 
         /**
-         * One line saying why a reference does not exist, for the one path
-         * where a reader explicitly asked (the 📖 reaction). Null if it does.
+         * One line saying why a reference does not exist, for the paths where
+         * a reader explicitly asked (the 📖 reaction, the context-menu
+         * commands). Null if it does.
          */
         describeMissing(ref) {
             if (!table || this.exists(ref)) return null;
@@ -108,4 +109,22 @@ export function makeChecker(table) {
             return `${ref.bookName} ${ref.chapter} has ${max} verse${max === 1 ? '' : 's'}, so there is no ${ref.bookName} ${ref.chapter}:${ref.startVerse}.`;
         },
     };
+}
+
+// The reply for a reference someone asked for that does not exist: the 📖
+// reaction and the three context-menu commands.
+//
+// Psalm 151 is the one missing chapter people are likely to mean on purpose:
+// it is real, it is in the Septuagint, and it is not in the Hebrew canon.
+// Deliberately does NOT point at /lxx - neither /lxx nor lookup_lxx can reach
+// it yet, since its rows have no Masoretic address to look it up by.
+export function missingReferenceLine(versification, ref) {
+    const label = ref.startVerse == null
+        ? `${ref.bookName} ${ref.chapter}`
+        : `${ref.bookName} ${ref.chapter}:${ref.startVerse}`;
+    const why = versification.describeMissing(ref) ?? `I couldn't find ${label}.`;
+    if (ref.bookId === 19 && ref.chapter === 151) {
+        return `${why} Psalm 151 is found in the Septuagint, not in the Hebrew Psalter.`;
+    }
+    return why;
 }

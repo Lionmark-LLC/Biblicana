@@ -7,7 +7,7 @@ import {
     TextDisplayBuilder,
 } from 'discord.js';
 import { parseScriptureRefs } from '../utils/scriptureRefs.js';
-import { getVersification } from '../utils/versification.js';
+import { getVersification, missingReferenceLine } from '../utils/versification.js';
 import { renderBibleEphemeral } from '../utils/bibleRenderer.js';
 import { respondToInteraction } from '../utils/paginationHelper.js';
 import logger from '../utils/logger.js';
@@ -44,8 +44,11 @@ export default {
         const versification = await getVersification();
         const validRefs = versification.filter(refs);
         if (validRefs.length === 0) {
+            // Every reference parsed but none exists ("Romans 17:1"): say why,
+            // the way the 📖 reaction does. describeMissing is synchronous.
+            const missing = refs.find(r => r.startVerse != null) ?? refs[0];
             return interaction.reply({
-                content: '🔍 No valid scripture references found in that message.',
+                content: `🔍 ${missingReferenceLine(versification, missing)}`,
                 flags: MessageFlags.Ephemeral,
             });
         }
