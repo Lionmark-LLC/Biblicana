@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, EmbedBuilder, MessageFlags, ApplicationIntegrationType, InteractionContextType } from 'discord.js';
 import logger from '../utils/logger.js';
 import { reportError } from '../utils/errorReporting.js';
-import { accentColor } from '../utils/theme.js';
+import { accentColor, footerText } from '../utils/theme.js';
 import 'dotenv/config';
 
 function formatUptime(ms) {
@@ -53,7 +53,7 @@ export default {
                 )
                 .setTimestamp()
                 .setFooter({
-                    text: process.env.EMBEDFOOTERTEXT,
+                    text: footerText(),
                     iconURL: process.env.EMBEDICONURL
                 });
 

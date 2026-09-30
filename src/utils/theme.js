@@ -25,10 +25,17 @@ export function accentColor() {
     return Number.isFinite(parsed) ? parsed : DEFAULT_ACCENT;
 }
 
+// Footer text for EmbedBuilder.setFooter. Never undefined: discord.js rejects
+// `text: undefined`, which made /stats throw on any machine whose .env lacks
+// EMBEDFOOTERTEXT (a fresh clone, a test run) before it could reply.
+export function footerText() {
+    return process.env.EMBEDFOOTERTEXT || DEFAULT_FOOTER;
+}
+
 // Build a small-text footer line. `suffix` is shown after a separator when
 // provided. Result already includes the `-#` markdown that renders as footer
 // text in a V2 TextDisplay component.
 export function footerLine(suffix = '') {
-    const base = process.env.EMBEDFOOTERTEXT || DEFAULT_FOOTER;
+    const base = footerText();
     return suffix ? `-# ${base} | ${suffix}` : `-# ${base}`;
 }

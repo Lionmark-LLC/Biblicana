@@ -1,4 +1,5 @@
 import { EmbedBuilder, MessageFlags } from 'discord.js';
+import { footerText } from '../../utils/theme.js';
 import 'dotenv/config';
 
 export default {
@@ -23,7 +24,7 @@ export default {
                 )
                 .setColor(embedColor)
                 .setFooter({
-                    text: process.env.EMBEDFOOTERTEXT,
+                    text: footerText(),
                     iconURL: process.env.EMBEDICONURL
                 });
 
