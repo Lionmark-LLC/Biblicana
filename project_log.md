@@ -6,6 +6,10 @@ Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md
 
 ## 2026-09-30
 
+### CI: lint and tests on every pull request
+
+New `.github/workflows/ci.yml` runs on every pull request and on pushes to `main`: Node 22, pnpm 10.34.5 via corepack (from `packageManager`), `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm test`. Read-only token (`permissions: contents: read`, `persist-credentials: false`), no secrets, no deploy or registration step; it uses `pull_request`, not `pull_request_target`, so fork PRs get no write access. Actions pinned to commit SHAs (checkout v7.0.1, setup-node v7.0.0) since the repo is public. Needs no data files: locally on Node 22 the suite passes 410 with 3 skipped, lint clean. Branch `agent/stephen/ci-lint-test` (LIO-25).
+
 ### Context-menu commands say why a reference does not exist
 
 After PR #1 the three message context-menu commands (Look up scripture, Show commentary, Show interlinear) refused "Romans 17:1" with a generic line, while the 📖 reaction on the same message explained it. When a message has references and none exists, all three now reply with the reaction's line ("Romans has 16 chapters, so there is no Romans 17.", Psalm 151 pointed at the Septuagint), explaining the first verse-level reference, else the first. The check still runs before the defer and stays synchronous. `missingReferenceLine` moved from `src/events/messageReactionAdd.js` to `src/utils/versification.js` so commands don't import an event handler; the reaction's reply is unchanged. Messages with no references, and Show commentary/interlinear on an existing chapter-only reference, keep their old replies. New `tests/contextMenuMissing.test.js` drives each `execute()` with a fake interaction; 13 of its 17 tests fail on the old commands. **Tests 396 -> 413** (410 pass, 3 skipped). Branch `agent/stephen/ctx-menu-missing-refs` (LIO-22); not deployed, no command re-registration needed (names and types unchanged).
