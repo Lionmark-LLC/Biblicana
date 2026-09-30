@@ -7,12 +7,14 @@
 // import time; these tests pin the resolution so a rebuild cannot quietly
 // regress it.
 //
-// Reads data/lxx.sqlite, which is gitignored and built by:
-//   node src/buildLxx.js <eng-Brenton_vpl.txt>
+// Runs on the committed fixture (tests/fixtures/data/lxx.sqlite, extracted from
+// the gitignored data/lxx.sqlite, which is built by
+// `node src/buildLxx.js <eng-Brenton_vpl.txt>`).
 //
 // NOTE: test names stay ASCII — prod's Node 18.13 TAP lexer dies on non-ASCII
 // in a test() description and reports the whole file as 0 passed.
 
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 

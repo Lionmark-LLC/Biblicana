@@ -10,11 +10,12 @@
 // CHAPTER ("Psalm 23 - New King James Version"), so the card came back with a
 // heading, five buttons and nothing to read.
 //
-// Reads bible.db, same as the pager tests.
+// Reads the bible.db fixture (tests/fixtures/data), same as the pager tests.
 //
 // NOTE: test names stay ASCII - prod's Node 18.13 TAP lexer dies on non-ASCII
 // in a test() description and reports the whole file as 0 passed.
 
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import log from 'loglevel';

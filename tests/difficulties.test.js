@@ -6,6 +6,11 @@
 // read straight across. These tests pin the three sentinel entries the build
 // itself refuses to ship without, plus the ranking rules that keep a passing
 // mention from outranking the entry that is ABOUT a verse.
+//
+// Runs on the committed fixture (tests/fixtures/data). Keyword search ranks by
+// how rare a word is across ALL 664 entries, so those tests need the real file
+// and live in difficulties.full.test.js, which skips without it.
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -39,13 +44,6 @@ test('a verse in two cases is resolved by what was asked', async () => {
     assert.match(pickDifficulty(rows, 'was Ahaziah the grandson of Omri or of Ahab? 2 Kings 8:26').title, /grandfather/);
 });
 
-test('by keyword: a rare word outweighs a common one', async () => {
-    // Flat counting ranked "Aaron died upon Mount Hor" above Judas for this.
-    const [top] = await difficultiesWrapper.search('how did Judas die');
-    assert.match(top.title, /Judas/);
-    const [g] = await difficultiesWrapper.search('who killed Goliath, David or Elhanan');
-    assert.match(g.title, /Elhanan/);
-});
 
 test('an excerpt of a long entry is the passage about the verse, not its opening', async () => {
     const [entry] = await difficultiesWrapper.getForVerse(12, 15, 1);
@@ -55,19 +53,6 @@ test('an excerpt of a long entry is the passage about the verse, not its opening
     assert.ok(ex.length <= 310);
 });
 
-test('Torrey essays are found by topic and cited as Torrey, not Haley', async () => {
-    const { difficultyCitation } = await import('../src/utils/studyHelper.js');
-    for (const [q, title] of [
-        ['where did Cain get his wife', /Cain Get His Wife/],
-        ['were Jesus and Paul mistaken about the time of his return', /Mistaken as to the Time/],
-        ['slaughter of the Canaanites', /Canaanites/],
-    ]) {
-        const [top] = await difficultiesWrapper.search(q);
-        assert.match(top.title, title, q);
-        assert.equal(top.source, 'torrey');
-        assert.match(difficultyCitation(top.source), /Torrey.*1907/);
-    }
-});
 
 test('by verse, an entry ABOUT the verse outranks an essay citing it', async () => {
     // Torrey is stored non-primary throughout, so Haley's Judas case must lead.
@@ -113,20 +98,16 @@ test('moral objections are routed to lookup_difficulty', async () => {
     assert.match(src, /INCLUDING a MORAL objection[\s\S]{0,400}Canaanites[\s\S]{0,400}call lookup_difficulty FIRST/);
 });
 
-test('a topic with a chapter number still reaches the topic', async () => {
-    // "Jephthah's daughter sacrifice Judges 11" parsed "Judges 11", took the
-    // by-verse path, checked verse 1, missed, and the bot went to the web.
-    const { toolLookupDifficulty } = await import('../src/utils/aiChat.js');
-    const out = await toolLookupDifficulty({ query: "Jephthah's daughter sacrifice Judges 11" });
-    assert.match(out, /Torrey/);
-    assert.match(out, /Jephthah/);
-    // and a chapter-only reference matches anything in that chapter
-    const rows = await difficultiesWrapper.getForVerse(7, 11, null, { limit: 5 });
-    assert.ok(rows.some(r => /Jephthah/.test(r.title)));
-});
 
 test('attribution is limited to the source\'s own verses', async () => {
     const src = await readFile(new URL('../src/utils/aiChat.js', import.meta.url), 'utf8');
     assert.match(src, /THE SAME GOES FOR VERSE REFERENCES/);
     assert.match(src, /Attribute to Torrey ONLY the verses that appear in this text/);
+});
+
+test('a chapter-only reference matches anything in that chapter', async () => {
+    // The by-verse half of "a topic with a chapter number" (the search half,
+    // which ranks over the whole corpus, is in difficulties.full.test.js).
+    const rows = await difficultiesWrapper.getForVerse(7, 11, null, { limit: 5 });
+    assert.ok(rows.some(r => /Jephthah/.test(r.title)));
 });

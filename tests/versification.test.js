@@ -4,7 +4,9 @@
 // the 📖 reaction posted a card with no scripture and five study buttons - a
 // user then pressed Commentary, Fathers and Interlinear on it in prod. The
 // versification table is loaded from bible.db once; these tests read the
-// same data rather than a hand-written list.
+// same data rather than a hand-written list (the bible.db fixture keeps the
+// last verse of every chapter, so its table is the real one).
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';

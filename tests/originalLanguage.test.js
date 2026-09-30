@@ -6,6 +6,8 @@
 // defend a translation, the bot asserted the Masoretic text read "et ahi" -
 // "the brother of" - which it does not. These tests pin both the data fact
 // and the caveat that stops the gloss being read as the text.
+import path from 'node:path';
+import { FIXTURE_DATA_DIR } from './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -22,7 +24,7 @@ test('both lookup_original success paths carry the gloss caveat', () => {
 });
 
 test('2 Sam 21:19 has no Hebrew word for brother, though the gloss says so', async () => {
-    const db = new sqlite3.Database(new URL('../data/bible.db', import.meta.url).pathname, sqlite3.OPEN_READONLY);
+    const db = new sqlite3.Database(path.join(FIXTURE_DATA_DIR, 'bible.db'), sqlite3.OPEN_READONLY);
     const row = await new Promise((res, rej) =>
         db.get('SELECT data FROM interlinear WHERE bookid=10 AND chapter=21 AND verse=19', (e, r) => (e ? rej(e) : res(r))));
     db.close();

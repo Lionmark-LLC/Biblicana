@@ -11,6 +11,7 @@
 // module load. That is fine here — the files are present in dev — but it is
 // why these tests only exercise the pure exports.
 
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import log from 'loglevel';

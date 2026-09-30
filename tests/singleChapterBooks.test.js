@@ -9,11 +9,14 @@
 //
 // So the list is DERIVED here rather than trusted. This file is separate from
 // scriptureRefs.test.js on purpose: that suite is pure and fast, and should not
-// start failing wholesale on a machine that has no bible.db.
+// start failing wholesale if data goes missing. It runs on the bible.db
+// fixture, which keeps the last verse of every chapter, so the derived
+// counts are the real ones.
 //
 // NOTE: test names stay ASCII - prod's Node 18.13 TAP lexer dies on non-ASCII
 // in a test() description and reports the whole file as 0 passed.
 
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import log from 'loglevel';

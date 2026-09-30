@@ -4,6 +4,7 @@
 // "tampered" with 2 Sam 21:19 by adding "the brother of", the bot could not see
 // the BSB's own footnote disclosing exactly that, and guessed - once in each
 // direction. data/bsb_footnotes.sqlite (src/buildBsbFootnotes.js) restores it.
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import log from 'loglevel';

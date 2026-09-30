@@ -5,11 +5,12 @@
 // addressed by REFERENCE index rather than page number so the arrows and the
 // jump menu agree across both — most of these tests pin that.
 //
-// Reads bible.db for verse lengths, same as the studyHelper tests.
+// Reads the bible.db fixture (tests/fixtures/data) for verse lengths.
 //
 // NOTE: test names stay ASCII — prod's Node 18.13 TAP lexer dies on non-ASCII
 // in a test() description and reports the whole file as 0 passed.
 
+import './helpers/fixtureData.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
