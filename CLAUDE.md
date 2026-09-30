@@ -10,7 +10,7 @@ Repo owner: the `Lionmark-LLC` GitHub org (`Lionmark-LLC/Biblicana`, public) sin
 
 ## Rules for agents (read first)
 
-Binding on every Claude session in this repo, and written for ops-platform's builder agent (Stephen: Claude Code in a container, no prod access, output is pull requests). A builder's job ends at a PR against `main`; Kenneth reviews and merges it, and Peter deploys after Kenneth approves by email. Nothing below is a judgement call.
+Binding on every Claude session in this repo, and written for ops-platform's builder agent (Stephen: Claude Code in a container, no prod access, output is pull requests). A builder's job ends at a PR against `main`, with a `User-facing:` section (see "Pull requests"); Kenneth reviews and merges it, and Peter deploys after Kenneth approves by email. Nothing below is a judgement call.
 
 - **Never register slash commands.** No `pnpm run deploy`, `deployg`, `node src/deploy.js` in any form. `deploy.js --global --rm` empties the command list of the prod bot in every server. Registration is Kenneth's step.
 - **Never run the guild prune** (`src/pruneGuildData.js`, `pnpm run prune`), dry run included: it logs in with a bot token and reads every guild row.
@@ -161,7 +161,7 @@ Never run `src/deploy.js` with the `--global` flag for development. The `deploy`
 
 ### Embed colors / chrome
 
-Embed color is `0x083459` (a dark teal). Embed footer, icon, and color values live in `.env` (not hardcoded), so they can be overridden per environment — useful for making local dev visually distinct from prod.
+Embed color is `0x083459` (a dark teal). Embed icon and color values live in `.env` (not hardcoded), so they can be overridden per environment — useful for making local dev visually distinct from prod. **The footer text is derived from `package.json`** (2026-09-30): `Biblicana v<version> by BlueBerean`, read once at startup by `src/utils/theme.js` (`footerText()` / `footerLine()`). `EMBEDFOOTERTEXT`, when set, overrides the whole footer; prod's `.env` still has it until Kenneth removes it, and local dev uses it to mark cards as dev. Every footer goes through `theme.js`; `tests/footerVersion.test.js` scans `src/` so nothing reads the variable directly.
 
 ### AI chat access gates
 
@@ -214,10 +214,10 @@ All code changes should be tested with the test bot against the test server BEFO
 
 Prod lives on droplet `biblicana-bot-prod-2` (Ubuntu 24.04, 1 vCPU / 2 GB, NYC3), reached **over the tailnet only** as `biblicana` — no public SSH, no root login, password auth off. The bot runs as user `biblicana` from `/srv/biblicana` under the systemd unit `pm2-biblicana`, started from `ecosystem.config.cjs` (which carries `--import ./src/instrument.js`, timestamps and log paths). The droplet's checkout is on **`main`**.
 
-**Deploys through Peter (ops-platform), installed 2026-09-29.** Push to `main`, then Kenneth asks Peter to deploy that commit and approves by email. Peter's key reaches the droplet only as a forced command: `/usr/local/bin/biblicana-deploy` (root-owned, from `ops-platform/remote/biblicana-deploy.sh`), settings in `/etc/biblicana-deploy.conf`, key line in `~biblicana/.ssh/authorized_keys` restricted to ops' tailnet IP. It has two verbs, `status` and `deploy <40-hex sha>`. `deploy` accepts only commits already on `origin/main`, then does a `git reset --hard` to it, `pnpm install --frozen-lockfile`, a plain `pm2 restart index` (no `--update-env`, so the bot keeps its environment), and a 15 s health check. It never runs `deploy`/`deployg` and never touches `.env`. It **refuses** if the checkout isn't on `main` or has modified tracked files, so don't hand-edit files on prod or switch its branch. The first deploy through this path is pending (ops runs it through the approval flow).
+**Deploys through Peter (ops-platform), installed 2026-09-29.** `main` is protected (a ruleset requires a pull request; no force push, no deletion, no bypass), so a change reaches `main` only when Kenneth merges its PR; then Kenneth asks Peter to deploy that commit and approves by email. Peter's key reaches the droplet only as a forced command: `/usr/local/bin/biblicana-deploy` (root-owned, from `ops-platform/remote/biblicana-deploy.sh`), settings in `/etc/biblicana-deploy.conf`, key line in `~biblicana/.ssh/authorized_keys` restricted to ops' tailnet IP. It has two verbs, `status` and `deploy <40-hex sha>`. `deploy` accepts only commits already on `origin/main`, then does a `git reset --hard` to it, `pnpm install --frozen-lockfile`, a plain `pm2 restart index` (no `--update-env`, so the bot keeps its environment), and a 15 s health check. It never runs `deploy`/`deployg` and never touches `.env`. It **refuses** if the checkout isn't on `main` or has modified tracked files, so don't hand-edit files on prod or switch its branch. The first deploy through this path is pending (ops runs it through the approval flow).
 
 Manual deploy (fallback, same result):
-1. Push changes to `main` on `Lionmark-LLC/Biblicana` on GitHub (the droplet's `origin` still names the old `BlueBerean/Biblicana` URL until someone runs `git remote set-url origin https://github.com/Lionmark-LLC/Biblicana.git` there as `biblicana`; GitHub's redirect keeps `git pull` working meanwhile)
+1. Get the change merged to `main` on `Lionmark-LLC/Biblicana` through a PR (the droplet's `origin` still names the old `BlueBerean/Biblicana` URL until someone runs `git remote set-url origin https://github.com/Lionmark-LLC/Biblicana.git` there as `biblicana`; GitHub's redirect keeps `git pull` working meanwhile)
 2. `ssh kenneth@biblicana`
 3. `sudo -iu biblicana bash -c 'cd /srv/biblicana && git pull --ff-only'`
 4. If `pnpm-lock.yaml` changed: `sudo -iu biblicana bash -c 'cd /srv/biblicana && pnpm install --frozen-lockfile'`
@@ -226,19 +226,34 @@ Manual deploy (fallback, same result):
 
 **Rollback is in-branch:** `sudo -iu biblicana bash -c 'cd /srv/biblicana && git reset --hard <good-commit>'` + restart. Through Peter, a rollback is `deploy <good-commit>` (any commit already on `main`; each successful deploy prints its own rollback sha). Don't switch the droplet's branch as part of a rollback: prod tracks `main`, and the deploy gate refuses any other branch. The old droplet was snapshotted (`biblicana-bot-prod-final-2026-09-25`, DO > Images > Snapshots) and destroyed on 2026-09-25; restoring that snapshot to a new droplet (~10 min) is the only way back to the old host, and should never be needed. If a prod-token bot ever runs in two places, both answer every event.
 
+### Pull requests
+
+`main` is protected: every change is a branch, pushed, with a PR opened by `gh pr create`; Kenneth merges on GitHub. CI (`.github/workflows/ci.yml`) runs lint and the tests on every PR.
+
+**Every PR description has a `User-facing:` section.** It holds one to three plain sentences on what a user of the bot will notice, or `User-facing: none` for internal-only work (tests, docs, refactors, ops). On release, Peter collects them and hands them to Silas, the comms agent, who writes the top.gg post from them, and **they are the only claims Silas may make**, so a wrong sentence here is a wrong public announcement.
+- **Verify every sentence against the code in the PR**, not against the plan or the issue. If a behaviour is conditional (admins only, AI chat only, one translation), say so.
+- **Write for a Discord user**, in the style of the v1.5.1 announcement (Kenneth's private `BIBLICANA_ANNOUNCEMENTS_v1.5.1.md`, outside the repo): what they can now do or will see, with a concrete example where it helps. No file names, function names, internal jargon or emoji. For example, from that announcement: *"Matthew Henry and Keil & Delitzsch write on whole passages rather than verse by verse. Biblicana was only finding their notes on the first verse of each passage, and returned nothing at all for the rest. That is now fixed."*
+- **Say what does not work yet** rather than implying it does. A fix names the symptom users saw ("`/config ai` no longer fails to open when many channels are selected").
+- **Commands needing a `deployg` to appear** say so in the PR body (outside `User-facing:`), because the command is not visible until Kenneth registers it.
+
+**The release PR bumps `package.json`'s `version`** (which also updates every footer); it is not a separate step after merge.
+
 ### Release checklist (version bumps only)
 
 An ordinary deploy is the six steps above. A **version bump** adds these, and
 they are ordered because two of them must happen BEFORE the restart.
 
-1. **`package.json` version.** What `pm2 list` reports.
-2. **`EMBEDFOOTERTEXT` in the droplet's `.env`** (`/srv/biblicana/.env`, edit as `biblicana`; written `EMBEDFOOTERTEXT = …` with spaces, which dotenv accepts) — the version users actually
-   see, on the footer of every card. It is a SECOND copy of the version string
-   and it does not live in git, so no commit, diff or test can catch it drifting.
-   It shipped stale at v1.6.0 and read `v1.5.1` in prod until someone noticed.
-   `sed -i "/^EMBEDFOOTERTEXT/s/v1\.5\.1/v1.6.0/" .env`, after `cp .env .env.bak-$(date +%Y%m%d-%H%M%S)`.
-   (Deriving it from `package.json` would end this class of bug; deliberately
-   not done, so it stays a checklist item.)
+1. **`package.json` version, bumped in the release PR itself.** It is what `pm2 list`
+   reports and, since 2026-09-30, the version on the footer of every card. The PR's
+   `User-facing:` sections since the last release are the release notes (see
+   "Pull requests" above).
+2. **`EMBEDFOOTERTEXT` in the droplet's `.env`, only while it is still set.** It
+   overrides the footer derived from `package.json`, so while it exists it must be
+   bumped by hand as before (`/srv/biblicana/.env`, as `biblicana`, after
+   `cp .env .env.bak-$(date +%Y%m%d-%H%M%S)`; written `EMBEDFOOTERTEXT = …` with
+   spaces). Removing that line ends this step for good: the footer then reads
+   `Biblicana v<version> by BlueBerean`, the same wording prod uses today. It
+   shipped stale at v1.6.0 and read `v1.5.1` in prod until someone noticed.
 3. **New data files, BEFORE the restart.** `data/` is gitignored, so `git pull`
    never brings a new SQLite. `scp` it with NO PIPE — scp can see a pipe fill
    and truncate silently with a clean exit, and a half-copied SQLite has a
@@ -286,7 +301,7 @@ they are ordered because two of them must happen BEFORE the restart.
 
 ## Branches
 
-- **`main` — the working and deploy branch since 2026-09-29.** Prod's checkout moved from `refactor` to `main` that day at the same commit (`09d1e5e`, no code change), done with `git checkout -B main --track origin/main` rather than checking out the droplet's stale local `main` (`bf20673`) and pulling, which would have put the 2024 tree on disk under the running bot for a moment. Push to `main` only; the deploy gate deploys only commits on `origin/main`. ESM, 11 real deps, 0 critical Dependabot alerts on its own tree. `/dictionary`, `/crossref`, `/topicalindex` and `/commentary` are local SQLite rather than RapidAPI; `/fathers`, `/persons`, `/places` and `/profile` were added. 34 command files, 33 registered globally (`/testwelcome` is `devOnly`). `/lxx` is the newest and, unlike a component, needed a `deployg`.
+- **`main` — the working and deploy branch since 2026-09-29.** Prod's checkout moved from `refactor` to `main` that day at the same commit (`09d1e5e`, no code change), done with `git checkout -B main --track origin/main` rather than checking out the droplet's stale local `main` (`bf20673`) and pulling, which would have put the 2024 tree on disk under the running bot for a moment. Changes reach it only by a merged PR (the branch is protected); the deploy gate deploys only commits on `origin/main`. ESM, 11 real deps, 0 critical Dependabot alerts on its own tree. `/dictionary`, `/crossref`, `/topicalindex` and `/commentary` are local SQLite rather than RapidAPI; `/fathers`, `/persons`, `/places` and `/profile` were added. 34 command files, 33 registered globally (`/testwelcome` is `devOnly`). `/lxx` is the newest and, unlike a component, needed a `deployg`.
 - **`refactor` — retired as the deploy branch 2026-09-29.** It was prod's branch from the v1.5.0 migration (2026-06-30) until then; `main` was fast-forwarded to it on 2026-09-25 (`bf20673..2920248`, 119 commits, nothing rewritten), and the two were kept identical until the switch. Pushing to `refactor` (and `git push origin refactor:main`) is no longer part of the flow. The branch still exists on GitHub and as a local branch on the droplet, both at `09d1e5e`; deleting it is Kenneth's call.
 
 ### Release history
