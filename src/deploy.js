@@ -81,5 +81,8 @@ const rest = new REST({ version: '10' }).setToken(process.env.DISCORDTOKEN);
         logger.info(`Successfully ${action} application (/) commands in ${scope} scope.`);
     } catch (error) {
         logger.error('Error during command deployment:', error);
+        // Non-zero so a failed upload can't pass for a successful one in a
+        // script or a gate that checks the exit code.
+        process.exitCode = 1;
     }
 })();

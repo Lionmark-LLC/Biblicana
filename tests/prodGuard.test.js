@@ -128,6 +128,15 @@ test('deploy.js passes the guard with the override', () => {
     assert.match(r.out, /--global/);
 });
 
+test('deploy.js exits non-zero when the upload fails', () => {
+    // No DISCORDTOKEN: discord.js's REST throws "Expected token to be set"
+    // locally, before any request, so this exercises the failure path offline.
+    // It used to log the error and exit 0.
+    const r = runScript('src/deploy.js', { CLIENTID: TEST_CLIENT_ID, GUILDID: '1' });
+    assert.match(r.out, /Error during command deployment/, r.out);
+    assert.equal(r.code, 1, r.out);
+});
+
 test('pruneGuildData.js refuses a prod PGHOST before connecting', () => {
     const r = runScript('src/pruneGuildData.js', {
         PGHOST: PROD_HOST, PGUSER: 'x', PGPASSWORD: 'x', PGDATABASE: 'x', DISCORDTOKEN: fakeToken(TEST_CLIENT_ID),
