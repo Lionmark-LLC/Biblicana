@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@discordjs/builders':
-        specifier: ^1.14.1
-        version: 1.14.1
       '@sentry/node':
         specifier: ^11.0.0
         version: 11.0.0

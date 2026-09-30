@@ -9,7 +9,6 @@
   },
   "packageManager": "pnpm@10.34.5",
   "dependencies": {
-    "@discordjs/builders": "^1.14.1",
     "@sentry/node": "^11.0.0",
     "@sentry/profiling-node": "^11.0.0",
     "axios": "^1.15.0",
