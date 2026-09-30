@@ -2,6 +2,7 @@ import { EmbedBuilder, MessageFlags } from 'discord.js';
 import { strongsWrapper } from '../../utils/bibleHelper.js';
 import logger from '../../utils/logger.js';
 import { reportError } from '../../utils/errorReporting.js';
+import { footerText } from '../../utils/theme.js';
 import 'dotenv/config';
 
 const HEBREW_COLOR = 0x3498DB;
@@ -56,7 +57,7 @@ export default {
                     truncatedDef
                 ].join('\n'))
                 .setFooter({
-                    text: `${process.env.EMBEDFOOTERTEXT || ''} | ${lexicon} Lexicon`.trim(),
+                    text: `${footerText()} | ${lexicon} Lexicon`,
                     iconURL: process.env.EMBEDICONURL
                 });
 

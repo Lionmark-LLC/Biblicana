@@ -1,8 +1,24 @@
 // Shared embed chrome. Accent color and footer text are configured via the
 // EMBEDCOLOR and EMBEDFOOTERTEXT env vars so prod and dev can look distinct.
 
+import { readFileSync } from 'node:fs';
+
 const DEFAULT_ACCENT = 0x083459;
-const DEFAULT_FOOTER = 'Biblicana';
+
+// The version users see on every card, read from package.json once at
+// startup. It used to live only in EMBEDFOOTERTEXT in the droplet's .env, a
+// second copy of the version that no commit, diff or test could see: it
+// shipped stale at v1.6.0 and read v1.5.1 in prod until someone noticed.
+// Now bumping package.json in the release PR is the whole job.
+export const APP_VERSION = JSON.parse(
+    readFileSync(new URL('../../package.json', import.meta.url), 'utf8')
+).version;
+
+// Same wording prod's EMBEDFOOTERTEXT carries, so removing that variable
+// changes nothing a user sees except that the version stays current.
+export function defaultFooter(version = APP_VERSION) {
+    return `Biblicana v${version} by BlueBerean`;
+}
 
 // Canonical external URLs for the BlueBerean site and legal pages. Exported
 // so every surface that needs them (welcome card, /support, /config ai, /help)
@@ -28,8 +44,15 @@ export function accentColor() {
 // Footer text for EmbedBuilder.setFooter. Never undefined: discord.js rejects
 // `text: undefined`, which made /stats throw on any machine whose .env lacks
 // EMBEDFOOTERTEXT (a fresh clone, a test run) before it could reply.
+// EMBEDFOOTERTEXT, when set, still overrides the whole footer (the prod
+// droplet has it until Kenneth removes it; local dev uses it to mark cards
+// as dev). Unset or blank, the footer carries package.json's version.
+export function footerFor(env = process.env, version = APP_VERSION) {
+    return env.EMBEDFOOTERTEXT?.trim() || defaultFooter(version);
+}
+
 export function footerText() {
-    return process.env.EMBEDFOOTERTEXT || DEFAULT_FOOTER;
+    return footerFor();
 }
 
 // Build a small-text footer line. `suffix` is shown after a separator when

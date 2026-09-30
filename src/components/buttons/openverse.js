@@ -16,7 +16,7 @@ import { commentaryWrapper, crossRefWrapper, fathersWrapper, pickMarqueeFather, 
 import { renderInterlinearEphemeral } from '../../utils/interlinearRenderer.js';
 import { renderParallelEphemeral } from '../../utils/parallelRenderer.js';
 import { renderBibleEphemeral } from '../../utils/bibleRenderer.js';
-import { accentColor, footerLine } from '../../utils/theme.js';
+import { accentColor, footerLine, footerText } from '../../utils/theme.js';
 import { attachPageCollector, buildPageNavRow, isExpiredInteractionError } from '../../utils/paginationHelper.js';
 import splitString from '../../utils/splitString.js';
 import logger from '../../utils/logger.js';
@@ -58,7 +58,7 @@ function baseEmbedColor() {
 function standardFooter(extra = '') {
     const suffix = extra ? ` | ${extra}` : '';
     return {
-        text: `${process.env.EMBEDFOOTERTEXT || ''}${suffix}`.trim(),
+        text: `${footerText()}${suffix}`.trim(),
         iconURL: process.env.EMBEDICONURL
     };
 }

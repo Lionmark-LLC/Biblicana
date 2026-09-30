@@ -16,7 +16,7 @@ import logger from '../utils/logger.js';
 import { reportError } from '../utils/errorReporting.js';
 import swearWordFilter from '../utils/filter.js';
 import { fetchIQBible } from '../utils/rapidApi.js';
-import { accentColor } from '../utils/theme.js';
+import { accentColor, footerText } from '../utils/theme.js';
 import 'dotenv/config';
 
 const HARDCODED_VERSION = 'kjv';
@@ -46,7 +46,7 @@ function buildAudioResponse({ bookId, bookName, chapter, audioUrl }) {
             `💻 Audio player appears inline on desktop. 📱 Mobile users: tap **Download MP3** below.`
         )
         .setFooter({
-            text: `${process.env.EMBEDFOOTERTEXT || 'Biblicana'} | MP3 format`,
+            text: `${footerText()} | MP3 format`,
             iconURL: process.env.EMBEDICONURL
         });
 
