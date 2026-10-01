@@ -23,12 +23,15 @@
     "yargs": "^17.7.2"
   },
   "devDependencies": {
-    "eslint": "^8.57.1"
+    "eslint": "^8.57.1",
+    "lefthook": "^2.1.15"
   },
   "scripts": {
     "test": "node --test tests/*.test.js",
     "start": "node --import ./src/instrument.js src/index.js",
-    "lint": "npx eslint .",
+    "lint": "pnpm exec eslint .",
+    "verify": "pnpm run lint && pnpm test",
+    "prepare": "lefthook install || echo 'WARNING: lefthook install failed, git hooks are NOT installed. Run: pnpm exec lefthook install' >&2",
     "prune": "node src/pruneGuildData.js",
     "deploy": "node src/deploy.js",
     "deployg": "node src/deploy.js --global"
