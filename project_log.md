@@ -4,6 +4,12 @@ Reverse-chronological log of significant changes, incidents and decisions. **New
 
 Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md`'s release history, `FOLLOWUPS.md` (gitignored, local), the Claude memory files, and `git log`. Entries before 2026-09-24 are summaries; the detail lives in those sources, named per entry. Dates are when a change was made or deployed, as stated; where two sources disagree, both are given.
 
+## 2026-10-01
+
+### `pnpm verify` and a pre-push hook
+
+One command now runs every check: `pnpm verify` is `pnpm run lint && pnpm test` (about 15 s on Node 22), and it fails if either fails (checked: a planted unused variable makes it exit 1). There is no typecheck or build to add: the repo is plain JavaScript run from source, and ESLint already parses every file. `lint` is now `pnpm exec eslint .` instead of `npx`. `lefthook` 2.1.15 is a devDependency, installed by a `prepare` script; `lefthook.yml` runs `pnpm verify` on `pre-push` and has no `pre-commit` hook (no formatter, and a slow pre-commit hook gets bypassed). `prepare` warns rather than fails when the install fails, because prod's deploy runs `pnpm install --frozen-lockfile` too. Note: `lefthook install` with no `lefthook.yml` present writes an example one. The CI change (one `pnpm verify` step in place of lint and test) is drafted in the PR for Kenneth to apply. Branch `agent/stephen/verify-lefthook` (LIO-58); bot behaviour unchanged.
+
 ## 2026-09-30
 
 ### CI: lint and tests on every pull request

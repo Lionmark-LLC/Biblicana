@@ -21,7 +21,7 @@ Binding on every Claude session in this repo, and written for ops-platform's bui
 - **Never read `.env*`, never `ssh`/`scp`, never deploy the website** (`wrangler`, `vercel`). `.claude/settings.json` denies these; treat the denies as a statement of intent, not the only barrier.
 - **Postgres config is `PGHOST`/`PGUSER`/`PGPASSWORD`/`PGDATABASE`** (`src/config.js`), not `DATABASE_URL`. Don't install Neon's agent skills (`npx neon init`, `npx skills add neondatabase/...`): they assume `DATABASE_URL` and run `neon env pull`, which rewrites `.env`.
 - **Paths outside this repo are marked _Kenneth's machine only_** (`../BIBLICANA_OPS.md`, `followups.md`, `data/new_data/`, `~/Development/reference/…`, the ops-platform repo). They do not exist in an agent's clone: don't go looking for them, and their absence is not a bug. Anything an agent needs from them is written into this file.
-- **Verify with the test suite:** `pnpm install --frozen-lockfile`, `pnpm test`, `pnpm run lint`, on Node 22. It needs no data files: tests read the committed fixtures in `tests/fixtures/data`, and the few that need a whole real file (`*.full.test.js`) skip with a reason. A skip is expected in a container; a failure is not. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
+- **Verify with `pnpm verify`** (after `pnpm install --frozen-lockfile`, on Node 22): it runs `pnpm run lint`, then `pnpm test`, and fails if either fails. Run it before every PR. The install also installs git hooks through lefthook (`lefthook.yml`): `pre-push` runs `pnpm verify`, and there is deliberately no `pre-commit` hook. Never skip the hook; if it doesn't run, check `git config --get core.hooksPath` (see the file's header). The suite needs no data files: tests read the committed fixtures in `tests/fixtures/data`, and the few that need a whole real file (`*.full.test.js`) skip with a reason. A skip is expected in a container; a failure is not. Test titles stay ASCII. A change the suite cannot exercise says so in the PR, with the manual test-bot steps for Kenneth to run.
 
 ## Tech stack
 
@@ -233,7 +233,7 @@ Manual deploy (fallback, same result):
 
 ### Pull requests
 
-`main` is protected: every change is a branch, pushed, with a PR opened by `gh pr create`; Kenneth merges on GitHub. CI (`.github/workflows/ci.yml`) runs lint and the tests on every PR.
+`main` is protected: every change is a branch, pushed, with a PR opened by `gh pr create`; Kenneth merges on GitHub. CI (`.github/workflows/ci.yml`) runs lint and the tests on every PR (the same checks as `pnpm verify`).
 
 **Every PR description has a `User-facing:` section.** It holds one to three plain sentences on what a user of the bot will notice, or `User-facing: none` for internal-only work (tests, docs, refactors, ops). On release, Peter collects them and hands them to Silas, the comms agent, who writes the top.gg post from them, and **they are the only claims Silas may make**, so a wrong sentence here is a wrong public announcement.
 - **Verify every sentence against the code in the PR**, not against the plan or the issue. If a behaviour is conditional (admins only, AI chat only, one translation), say so.

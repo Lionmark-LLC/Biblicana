@@ -24,8 +24,10 @@ most; the rules below repeat it for review. When the two disagree, `CLAUDE.md` w
 
 ## Checks
 
-On Node 22: `pnpm install --frozen-lockfile`, then `pnpm test` and `pnpm run lint` (CI runs the
-same). No data files or `.env` are needed: tests use `tests/fixtures/data`, and `*.full.test.js`
+On Node 22: `pnpm install --frozen-lockfile`, then `pnpm verify` (lint, then the tests; it fails
+if either fails). Run it before every PR. The install also sets up git hooks (lefthook,
+`lefthook.yml`): `pre-push` runs `pnpm verify`; there is no `pre-commit` hook. Never skip the
+hook. No data files or `.env` are needed: tests use `tests/fixtures/data`, and `*.full.test.js`
 skip with a reason when the real files are absent. A skip is expected; a failure is not. Test
 titles stay ASCII.
 
