@@ -1,0 +1,9 @@
+# Git hooks, run by lefthook. Installed by `pnpm install` (`prepare`).
+# If hooks don't run, check `git config --get core.hooksPath` first: a stale
+# hooksPath makes git run no hooks at all, silently (Ekklesia lost every hook).
+# No pre-commit hook: no formatter, and the checks take ~15 s. A formatter job
+# must compute its own file list (lefthook's {staged_files} was empty in Ekklesia).
+pre-push:
+  jobs:
+    - name: verify
+      run: pnpm verify
