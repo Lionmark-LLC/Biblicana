@@ -1,13 +1,13 @@
 ---
 name: Branch state for reviews
-description: Biblicana has two branches with different conventions — review expectations differ
+description: One branch since 2026-09-25: main is ESM, pnpm, Node 22, and is what prod runs; refactor is retired
 type: project
 ---
 
-Biblicana has two active branches with different module systems and deps:
-- `main` — CommonJS, npm, deployed to prod (457 servers), 22 commands, RapidAPI-heavy
-- `refactor` — ESM (`"type": "module"`), pnpm, 26 commands, local SQLite replacing most RapidAPI calls
+**Rewritten 2026-10-01.** The old version of this note described a CommonJS `main` deployed to prod and an ESM `refactor` branch. That is obsolete and backwards: `main` was fast-forwarded to `refactor` on 2026-09-25, prod moved to `main` on 2026-09-29, and `refactor` is retired.
 
-**Why:** Code-review reports should not flag CommonJS-vs-ESM as a bug without first checking which branch the file is on. Likewise, deps/vulnerability counts diverge.
+Today there is one working branch, `main`: ESM (`"type": "module"`), pnpm (pinned via `packageManager`), Node 22, protected (changes arrive only as merged PRs). CommonJS (`require`, `module.exports`) in `src/` is a bug, not a branch difference. `/dictionary`, `/crossref`, `/topicalindex` and `/commentary` read local SQLite through `src/utils/studyHelper.js`; RapidAPI remains for `/audio`, `/bookinfo`, `/originaltext`, `/parallel`, `/semantics` and `/topic`.
 
-**How to apply:** When reviewing, confirm the branch (`git branch --show-current`) before evaluating module syntax, package.json shape, or which RapidAPI endpoints are "still used". On `refactor`, local SQLite wrappers live in `src/utils/studyHelper.js` and are the current source of truth for dictionary/crossref/topicalindex/commentary; on `main` those commands still hit RapidAPI.
+**Why:** a reviewer following the old note would have excused CommonJS as "the main branch convention".
+
+**How to apply:** review against `main` and the repo's `CLAUDE.md` / `AGENTS.md`. Data files open only through `src/utils/dataFiles.js`; footers only through `src/utils/theme.js`.

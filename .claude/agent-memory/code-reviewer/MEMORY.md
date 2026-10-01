@@ -1,1 +1,2 @@
-- [Main vs refactor divergence](project_branch_state.md) — refactor branch is unmerged; review scope and prod expectations differ between branches
+- [Branch state](project_branch_state.md) — one branch: main is ESM/pnpm/Node 22 and is prod; refactor retired (the old CommonJS-main note was backwards)
+- [Persistence durability model](project_persistence_durability.md) — writes are Postgres-first now (fixed); reads still default on DB error, masking outages
