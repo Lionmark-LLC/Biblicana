@@ -1,4 +1,4 @@
-# Lint and test on every pull request and on pushes to main.
+# Run every check (pnpm verify: lint, then tests) on every pull request and on pushes to main.
 # No secrets and no deploy: the suite needs no data files (the *.full tests skip).
 name: CI
 
@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint-and-test:
+  verify:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -28,5 +28,4 @@ jobs:
       # pnpm version comes from package.json's packageManager field.
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm test
+      - run: pnpm verify
