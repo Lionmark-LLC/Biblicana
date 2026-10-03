@@ -4,6 +4,9 @@ Biblicana is a Node.js Discord bot (discord.js 14, ESM, Node 22) in ~590 servers
 the full guide** and binds every agent. Its "Rules for agents" section is the part that matters
 most; the rules below repeat it for review. When the two disagree, `CLAUDE.md` wins.
 
+These hard rules bind agents. Kenneth's own session follows the safety ones too and may run
+registration, prune or deploys when he asks (see CLAUDE.md, "Kenneth's own session").
+
 ## Hard rules (a PR that breaks one should not be approved)
 
 - **No slash-command registration.** Nothing may run `src/deploy.js`, `pnpm run deploy` or
