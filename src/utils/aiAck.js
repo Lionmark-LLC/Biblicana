@@ -7,83 +7,61 @@ import {
 } from 'discord.js';
 import { accentColor, PRIVACY_URL, TERMS_URL } from './theme.js';
 import logger from './logger.js';
+import { getLegalVersions, decideAck, DOCUMENT_TITLES } from './legalVersions.js';
 
-// Per-user AI-chat acknowledgment gate.
+// Per-user acknowledgment gate for AI chat, /find and /web.
 //
 // Discord's privileged-intents + off-platform-data story hinges on per-user
 // assent, not just admin install-time assent. An admin toggling AI chat on for
 // a server doesn't legally commit every user in that server to sending message
-// text to OpenAI. This gate fills the gap: first time a given user triggers
-// AI chat (any guild channel / scope), they see a one-time
-// disclosure with an Acknowledge button. Clicking sets a timestamp on the
-// user record; they never see it again — unless TERMS_MIN_ACK_DATE is bumped.
-
-// ── Terms-version dial ────────────────────────────────────────────────────
+// text to OpenAI. This gate fills the gap: the first time a user triggers one
+// of these features they see a disclosure with an Acknowledge button, and the
+// click stores a timestamp on their user record.
 //
-// ISO 8601 cutoff. Any stored aiTermsAcknowledgedAt earlier than this is
-// treated as stale — the user will see the first-use disclosure again on
-// their next AI-chat interaction, and the re-ack overwrites their timestamp.
+// What counts as current comes from Neon since 2026-10-03, not a constant:
+// published versions of the Terms and Privacy Policy, each with a change
+// level (src/utils/legalVersions.js decides; blueberean-site's legal/ holds
+// the text; `pnpm run legal:publish` copies a version into Neon after the site
+// serves it). Editorial changes never re-prompt; a notice shows its summary
+// once, with Got it, alongside the normal reply; a material change re-prompts,
+// and the disclosure says what changed.
 //
-// WHEN TO BUMP: material changes to the Privacy Policy or Terms of Service
-// — new data flows, new third-party processors, new retention policies,
-// expanded data use. Cosmetic edits don't require bumping.
-//
-// HOW TO BUMP: set this to an ISO timestamp at or shortly before the new
-// policy's effective time (UTC). Deploy the bump in the same commit that
-// updates the actual policy text at blueberean.com/privacy + /terms so the
-// disclosure link surfaces the updated content.
-//
-// Compared lex-string-to-string (ISO 8601 sorts correctly that way — no
-// need to parse to Date).
-//
-// History:
-//   2026-04-17 — v1: initial launch of the per-user AI-chat ack gate.
-//   2026-08-03 — v2: /web moved from Tavily to OpenAI's built-in web search,
-//     and AI chat gained the ability to trigger a web search when the local
-//     library can't answer.
-//
-//     The Tavily removal alone would NOT justify a re-ack — dropping a
-//     recipient narrows sharing versus what users already agreed to. The bump
-//     is for the addition: an @mention previously produced text generation
-//     only, and now may cause an outbound search. Same processor, new
-//     processing activity, and the Art. 6(1)(a) consent basis leans on the
-//     disclosure being accurate about what actually happens.
-//   2026-09-29 — v3: Privacy Policy now discloses Sentry (bot error reports,
-//     traces and profiles, sending since 2026-09-25) and Cloudflare as the
-//     website host in place of Vercel. Sentry is a new processor, which is
-//     material; the host swap alone would not have been. Policy went live
-//     via blueberean-site@5f28424.
-export const TERMS_MIN_ACK_DATE = '2026-09-29T00:00:00.000Z';
+// History of the old TERMS_MIN_ACK_DATE dial, kept for the record:
+//   2026-04-17 — initial launch of the per-user AI-chat ack gate.
+//   2026-08-03 — /web moved from Tavily to OpenAI's built-in web search, and
+//     AI chat gained web search (a new processing activity, so a re-ack).
+//   2026-09-29 — Privacy Policy disclosed Sentry (a new processor) and
+//     Cloudflare as website host. This is Privacy v1's effective time, and
+//     FALLBACK_REQUIRED_AT in legalVersions.js, so nothing changed at switchover.
 
 /**
- * Check whether the user has a valid ack for the current Terms version.
+ * Check the user's acknowledgment against the published versions.
  *
- * Returns an object:
- *   { valid: true,  ackedAt: '<ISO>' }             — acked, current, good to go
- *   { valid: false, reason: 'never' }               — no stored ack at all
- *   { valid: false, reason: 'stale', ackedAt: '…' } — acked, but pre-cutoff
- *   { valid: false, reason: 'error' }               — DB failure; fail-closed
+ *   { valid: true,  ackedAt, requiredAt, notices }        — good to go; show
+ *                                                           any notices after
+ *                                                           the normal reply
+ *   { valid: false, reason: 'never',  requiredAt, changes: [] }
+ *   { valid: false, reason: 'stale',  ackedAt, requiredAt, changes }
+ *   { valid: false, reason: 'error',  requiredAt: null, changes: [] }
+ *                                                         — DB failure; fail closed
  *
- * The reason field lets the caller tailor the disclosure copy — returning
- * users who are being re-prompted due to a policy bump get a "we've updated
- * our terms since you last agreed" message rather than the first-time
- * "before we chat" greeting.
+ * `changes` (stale) is what the disclosure lists under "What changed".
  */
-export async function checkAckStatus(database, userId) {
+export async function checkAckStatus(database, userId, { now = Date.now() } = {}) {
+    let ackedAt;
     try {
         const user = await database.getUserValue(userId);
-        const ackedAt = user?.aiTermsAcknowledgedAt;
-        if (!ackedAt) return { valid: false, reason: 'never' };
-        // Stale ack (predates current terms version): treat as unacked.
-        if (ackedAt < TERMS_MIN_ACK_DATE) {
-            logger.debug(`[AiAck] Stale ack for user=${userId}: ${ackedAt} < ${TERMS_MIN_ACK_DATE}, re-prompting`);
-            return { valid: false, reason: 'stale', ackedAt };
-        }
-        return { valid: true, ackedAt };
+        ackedAt = user?.aiTermsAcknowledgedAt || null;
     } catch (err) {
         logger.debug(`[AiAck] Read failed for user=${userId}: ${err.message}`);
-        return { valid: false, reason: 'error' };
+        return { valid: false, reason: 'error', requiredAt: null, changes: [] };
     }
+    const { versions } = await getLegalVersions(database, { now });
+    const decision = decideAck({ ackedAt, versions, now });
+    if (decision.reason === 'stale') {
+        logger.debug(`[AiAck] Stale ack for user=${userId}: ${ackedAt} < ${decision.requiredAt}, re-prompting`);
+    }
+    return decision;
 }
 
 /**
@@ -107,13 +85,17 @@ export async function markAiTermsAcked(database, userId) {
     }
 }
 
-// Button customId format: aichat_ack:<userId>. The userId is encoded so the
-// handler can verify the clicker matches the intended recipient without an
-// extra DB round-trip.
-function ackButtonRow(userId) {
+// Button customId format: aichat_ack:<userId>:<requiredMs>. The userId lets
+// the handler check the clicker without a DB round-trip. requiredMs is the
+// effective time (epoch ms) of the newest material version the disclosure was
+// shown for: a disclosure left on screen across a new material version must
+// not satisfy it, so the handler refreshes instead of saving
+// (parseAckCustomId, isAckButtonCurrent).
+function ackButtonRow(userId, requiredAt) {
+    const requiredMs = requiredAt ? Date.parse(requiredAt) : '';
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`aichat_ack:${userId}`)
+            .setCustomId(`aichat_ack:${userId}:${requiredMs}`)
             .setLabel('Acknowledge & continue')
             .setStyle(ButtonStyle.Primary)
     );
@@ -137,9 +119,9 @@ const MECHANICS_BULLETS_SLASH = [
     // The query now reaches only OpenAI, and its searches are confined to a
     // curated allowlist of Christian reference sites (see ALLOWED_DOMAINS in
     // web.js). This is strictly FEWER third parties than users previously
-    // agreed to, so TERMS_MIN_ACK_DATE is deliberately NOT bumped — forcing a
-    // re-acknowledgment would be noise for a change that only narrows data
-    // sharing. Bump it only if a change ever widens what is shared.
+    // agreed to, so it did not force a re-acknowledgment, which would be noise
+    // for a change that only narrows data sharing. The same reasoning picks a
+    // change level today: only a change that widens what is shared is material.
     '• Your query is sent to OpenAI to generate a response (for `/web`, OpenAI also searches a fixed list of Christian reference sites).',
     '• No conversation memory is kept — each `/find` or `/web` invocation is one-shot.',
     '• This acknowledgment also covers AI chat (mention or reply).',
@@ -158,20 +140,37 @@ function shortDate(isoString) {
 // Text-only renderer. The two payload builders below wrap this differently
 // depending on whether we're rendering into a plain-text message (AI chat)
 // or a Components V2 container (slash-command editReply).
-function renderDisclosureText({ kind = 'first_time', lastAckedAt = null, source = 'aichat' } = {}) {
+// "What changed" lines for an updated-terms disclosure, newest first, added
+// only while they fit `budget` characters (a plain AI-chat message is capped
+// at 2,000; a V2 text display at 4,000).
+function whatChangedLines(changes, budget) {
+    const lines = [];
+    let used = 0;
+    for (const c of changes ?? []) {
+        const line = `• **${DOCUMENT_TITLES[c.document] ?? c.document}** (version ${c.version}, ${shortDate(c.effectiveAt)}): ${c.summary}`;
+        if (used + line.length + 1 > budget) break;
+        lines.push(line);
+        used += line.length + 1;
+    }
+    return lines.length ? ['**What changed:**', ...lines] : [];
+}
+
+const PLAIN_LIMIT = 2000;
+const V2_LIMIT = 4000;
+
+function renderDisclosureText({ kind = 'first_time', lastAckedAt = null, source = 'aichat', changes = [] } = {}) {
     const bullets = source === 'slash' ? MECHANICS_BULLETS_SLASH : MECHANICS_BULLETS_AICHAT;
     if (kind === 'updated') {
         const lastDate = shortDate(lastAckedAt);
         const leadLine = lastDate
             ? `**We've updated our Privacy Policy and Terms** since your last agreement on ${lastDate}.`
             : `**We've updated our Privacy Policy and Terms** since your last agreement.`;
-        return [
-            leadLine,
-            'Quick refresher on how this feature works:',
-            ...bullets,
-            '',
-            '-# Click below to continue under the updated terms.',
-        ].join('\n');
+        const head = [leadLine];
+        const tail = ['Quick refresher on how this feature works:', ...bullets, '', '-# Click below to continue under the updated terms.'];
+        const fixed = [...head, ...tail].join('\n').length;
+        const limit = source === 'slash' ? V2_LIMIT : PLAIN_LIMIT;
+        const changed = whatChangedLines(changes, limit - fixed - 40);
+        return [...head, ...(changed.length ? [...changed, ''] : []), ...tail].join('\n');
     }
     // 'first_time' (default)
     return [
@@ -194,11 +193,13 @@ function renderDisclosureText({ kind = 'first_time', lastAckedAt = null, source 
  * @param {object} [options]
  * @param {'first_time'|'updated'} [options.kind='first_time']
  * @param {string} [options.lastAckedAt] - ISO timestamp of prior ack
+ * @param {Array} [options.changes] - checkAckStatus's `changes`, listed as "What changed"
+ * @param {string} [options.requiredAt] - checkAckStatus's `requiredAt`, encoded in the button
  */
 export function buildAckDisclosurePayload(userId, options = {}) {
     return {
         content: renderDisclosureText({ ...options, source: 'aichat' }),
-        components: [ackButtonRow(userId)],
+        components: [ackButtonRow(userId, options.requiredAt)],
     };
 }
 
@@ -215,7 +216,7 @@ export function buildAckDisclosureV2(userId, options = {}) {
     const container = new ContainerBuilder()
         .setAccentColor(accentColor())
         .addTextDisplayComponents(new TextDisplayBuilder().setContent(renderDisclosureText({ ...options, source: 'slash' })));
-    return [container, ackButtonRow(userId)];
+    return [container, ackButtonRow(userId, options.requiredAt)];
 }
 
 /**
@@ -236,4 +237,79 @@ export function buildAckConfirmedV2() {
             ].join('\n')
         ));
     return [container];
+}
+
+// The disclosure options for a failed checkAckStatus, shared by the three
+// gated features so they cannot drift.
+export function disclosureOptionsFor(ack) {
+    return {
+        kind: ack.reason === 'stale' ? 'updated' : 'first_time',
+        lastAckedAt: ack.ackedAt ?? null,
+        changes: ack.changes ?? [],
+        requiredAt: ack.requiredAt ?? null,
+    };
+}
+
+/** Split `aichat_ack:<userId>:<requiredMs>`; a missing requirement (buttons from before 2026-10-03) reads as null. */
+export function parseAckCustomId(customId) {
+    const [, userId, requiredMs] = String(customId).split(':');
+    const n = Number(requiredMs);
+    return { userId: userId || null, requiredMs: requiredMs && Number.isFinite(n) ? n : null };
+}
+
+/**
+ * Whether an Acknowledge click may be saved: the disclosure must have been
+ * shown for the current requirement. Buttons from before 2026-10-03 carry
+ * none and are treated as shown for the 2026-09-29 floor.
+ */
+export function isAckButtonCurrent(requiredMs, currentRequiredAt, floorAt) {
+    const shownFor = requiredMs ?? Date.parse(floorAt);
+    return shownFor >= Date.parse(currentRequiredAt);
+}
+
+// ── Notices (non-blocking) ──────────────────────────────────────────────
+//
+// A notice rides along with the normal reply and never blocks it. "Got it"
+// (customId legal_notice_ok:<userId>) records a new acknowledgment timestamp,
+// which is the click the Privacy Policy describes; the handler refuses while a
+// material version is in effect and unacknowledged.
+
+function noticeLines(notices) {
+    return (notices ?? []).map(n => {
+        const title = DOCUMENT_TITLES[n.document] ?? n.document;
+        return n.upcoming
+            ? `• **${title}** changes on ${shortDate(n.effectiveAt)}: ${n.summary}`
+            : `• **${title}** was updated (version ${n.version}): ${n.summary}`;
+    });
+}
+
+function noticeText(notices) {
+    const upcoming = (notices ?? []).some(n => n.upcoming);
+    return [
+        upcoming ? '**Heads-up: our terms are changing.**' : '**We updated our terms.**',
+        ...noticeLines(notices),
+        `-# [Privacy Policy](${PRIVACY_URL}) · [Terms of Service](${TERMS_URL})`,
+    ].join('\n');
+}
+
+function noticeButtonRow(userId) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`legal_notice_ok:${userId}`)
+            .setLabel('Got it')
+            .setStyle(ButtonStyle.Secondary)
+    );
+}
+
+/** Plain-text notice for AI chat, sent as its own reply after the answer. */
+export function buildLegalNoticePayload(userId, notices) {
+    return { content: noticeText(notices), components: [noticeButtonRow(userId)] };
+}
+
+/** Components V2 notice for /find and /web, sent as an ephemeral follow-up after the result. */
+export function buildLegalNoticeV2(userId, notices) {
+    const container = new ContainerBuilder()
+        .setAccentColor(accentColor())
+        .addTextDisplayComponents(new TextDisplayBuilder().setContent(noticeText(notices)));
+    return [container, noticeButtonRow(userId)];
 }

@@ -192,6 +192,21 @@ Suppression is **silent** by design — a "you are not allowed" reply would be n
 
 Each `/config ai` select handler re-renders the **whole** panel after saving its own setting, so it must read all the settings it did *not* change. Miss one and the database keeps the right value while the panel renders it as unset — which reads to an admin as their setting having just been cleared. This has been got wrong twice; `tests/aiConfig.test.js` now asserts structurally that every handler calling `buildAiConfigView` sources all five.
 
+### Legal documents and the acknowledgment gate
+
+AI chat, `/find` and `/web` sit behind one per-user acknowledgment (`src/utils/aiAck.js`). **What is current comes from Neon since 2026-10-03**, not a constant: the table `legal_document_versions` (`docs/ops/legal-versions.sql`, append-only by trigger) holds each published version of the Terms and Privacy Policy, with an effective time, a change level and a plain "what changed" summary.
+
+- **The text lives in blueberean-site**, `legal/<document>/v<N>.md`, one file per version, never edited after publishing. The site renders it (prerendered, so it works without JavaScript) and serves each raw file at `https://www.blueberean.com/legal/<document>/v<N>.md`.
+- **Publishing:** deploy the site first, then `BIBLICANA_ALLOW_PROD=1 pnpm run legal:publish -- <document> <N>` (`src/publishLegal.js`). It fetches the file from the live site, refuses unless it is served there, validates it (next version, later effective time, a material change not effective in the past except v1) and inserts it with a hash read-back. The bot picks it up within 10 minutes; no deploy, no `deployg`.
+- **The rule** (`decideAck` in `src/utils/legalVersions.js`, table-tested in `tests/legalVersions.test.js`):
+  - no acknowledgment: the first-time disclosure;
+  - a material version in effect after the user's acknowledgment: the "We've updated" disclosure, listing "What changed";
+  - a notice version, or a material version still in its notice period: a non-blocking notice after the normal reply, with **Got it**;
+  - editorial: nothing.
+- **Only the one timestamp is stored** (`aiTermsAcknowledgedAt`), because the Privacy Policy says the acknowledgment "records a timestamp against your Discord user ID". New per-user fields would need a policy change.
+- **Got it never satisfies a material version** (Kenneth, 2026-10-03; to be confirmed by counsel in the legal audit). The handler (`src/components/buttons/legalNotice.js`) re-checks and refuses while the user is blocked. The Acknowledge button encodes the requirement it was shown for (`aichat_ack:<user>:<requiredMs>`), so a disclosure left on screen across a new material version is refreshed, not saved.
+- **Reading Neon:** the version list is cached for 10 minutes, refreshed only by a gate check (never a timer, which would keep Neon awake), and held for a minute after a failure. If the table is empty or unreadable with nothing cached, the gate uses `FALLBACK_REQUIRED_AT` (2026-09-29), the same cutoff the old `TERMS_MIN_ACK_DATE` had, so it blocks exactly as before.
+
 ## Development workflow
 
 ### Local setup (first time)
@@ -215,7 +230,7 @@ All code changes should be tested with the dev bot BEFORE they reach `main`. The
 
 **Live tests go through ops-platform's `devbot-runner` (since 2026-09-30).** It runs the dev bot (Biblicana#6575) on Kenneth's dev token, and Stephen drives it; nobody else starts a dev bot. Two processes on one token both answer every message, so a local run (`node src/index.js`) needs Kenneth to confirm first that the runner is stopped.
 - **The dev bot's only server is Sola Lab** (`1494355279515746455`). It left Biblicana2, "Grainger's server" and "Mr Moth Devs" on 2026-09-30, and the runner refuses to start if it is in any other server. Never add it to another one: the daily-verse scheduler, passive detection, reactions and AI chat all act in every server the bot is in.
-- **The runner's database is `stephen-dev`**, a schema-only Neon branch with its own login. The older `dev-local` branch holds an April 2026 copy of prod's real users (guild settings, preferences, acknowledgments). It is Kenneth's, not for agents, and not used by the runner.
+- **The runner's database is `stephen-dev`**, a schema-only Neon branch with its own login. (`dev-local`, Kenneth's older dev branch with an April 2026 copy of real users, was deleted by 2026-10-03; only `main` and `stephen-dev` exist.)
 
 ### Deploying to prod
 
@@ -372,4 +387,4 @@ they are ordered because two of them must happen BEFORE the restart.
 - **Sentry**: https://lionmark.sentry.io — project `biblicana` (issues, traces, the `biblicana-gateway` cron monitor)
 - **Upstream**: https://github.com/Lionmark-LLC/Biblicana
 - **Discord dev portal**: https://discord.com/developers/applications (both prod and test bot apps owned by Kenneth)
-- **Neon console**: https://console.neon.tech — `Biblicana` project holds the live Postgres (`main`). `stephen-dev` (schema only) is the `devbot-runner`'s database; `dev-local` is Kenneth's older dev branch, an April 2026 copy of real users, not for agents.
+- **Neon console**: https://console.neon.tech — `Biblicana` project holds the live Postgres (`main`). `stephen-dev` (schema only) is the `devbot-runner`'s database. Those are the only two branches since `dev-local` was deleted (by 2026-10-03). Restore history: 6 hours (`history_retention_seconds` 21600 since 2026-10-03, matching the Privacy Policy).

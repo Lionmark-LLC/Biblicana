@@ -20,6 +20,7 @@
     "pg": "^8.13.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^6.0.1",
+    "yaml": "^2.9.1",
     "yargs": "^17.7.2"
   },
   "devDependencies": {
@@ -34,7 +35,8 @@
     "prepare": "lefthook install || echo 'WARNING: lefthook install failed, git hooks are NOT installed. Run: pnpm exec lefthook install' >&2",
     "prune": "node src/pruneGuildData.js",
     "deploy": "node src/deploy.js",
-    "deployg": "node src/deploy.js --global"
+    "deployg": "node src/deploy.js --global",
+    "legal:publish": "node src/publishLegal.js"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

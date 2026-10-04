@@ -17,7 +17,7 @@ import {
 } from './studyHelper.js';
 import { searchAllowedWeb, buildWebSourceMap } from './webSearch.js';
 import { readAiMemoryScope } from './aiConfig.js';
-import { checkAckStatus, buildAckDisclosurePayload } from './aiAck.js';
+import { checkAckStatus, buildAckDisclosurePayload, buildLegalNoticePayload, disclosureOptionsFor } from './aiAck.js';
 import swearWordFilter, { stripModelMarkup, trimToLastCompleteSentence } from './filter.js';
 import logger from './logger.js';
 import { reportError } from './errorReporting.js';
@@ -1721,19 +1721,17 @@ export async function handleAiChat(message, database, options = {}) {
         //   'stale' → updated-terms notice ("We've updated our Privacy Policy
         //             and Terms since your last agreement on YYYY-MM-DD")
         //   'error' → treat as first-time (safer fallback; error path is rare)
+        let legalNotices = [];
         if (!skipAckGate) {
             const ack = await checkAckStatus(database, message.author.id);
             if (!ack.valid) {
-                const kind = ack.reason === 'stale' ? 'updated' : 'first_time';
                 await message.reply({
-                    ...buildAckDisclosurePayload(message.author.id, {
-                        kind,
-                        lastAckedAt: ack.ackedAt ?? null,
-                    }),
+                    ...buildAckDisclosurePayload(message.author.id, disclosureOptionsFor(ack)),
                     allowedMentions: { repliedUser: false },
                 });
                 return;
             }
+            legalNotices = ack.notices ?? [];
         }
 
         // --- Input sanitization & hard blocks ---
@@ -1951,6 +1949,19 @@ export async function handleAiChat(message, database, options = {}) {
                 }
             } catch (err) {
                 logger.warn(`[AiChat] Verse expansion failed for message ${sentMessage.id}: ${err.message}`);
+            }
+        }
+
+        // A policy notice, if any, follows the answer as its own reply, so it
+        // never delays or replaces it. Only the asker can press Got it.
+        if (sentMessage && legalNotices.length) {
+            try {
+                await message.reply({
+                    ...buildLegalNoticePayload(message.author.id, legalNotices),
+                    allowedMentions: { repliedUser: false },
+                });
+            } catch (err) {
+                logger.warn(`[AiChat] Could not send legal notice: ${err.message}`);
             }
         }
 

@@ -16,7 +16,7 @@ import { bibleWrapper, coerceTranslation } from '../utils/bibleHelper.js';
 import { numbersToBook, bookAbbreviations, getBookId } from '../utils/bookNames.js';
 import { accentColor, footerLine } from '../utils/theme.js';
 import { attachPageCollector } from '../utils/paginationHelper.js';
-import { checkAckStatus, buildAckDisclosureV2 } from '../utils/aiAck.js';
+import { checkAckStatus, buildAckDisclosureV2, buildLegalNoticeV2, disclosureOptionsFor } from '../utils/aiAck.js';
 import logger from '../utils/logger.js';
 import { reportError } from '../utils/errorReporting.js';
 
@@ -207,13 +207,9 @@ export default {
             // hit OpenAI until they've seen and clicked the disclosure.
             const ack = await checkAckStatus(database, interaction.user.id);
             if (!ack.valid) {
-                const kind = ack.reason === 'stale' ? 'updated' : 'first_time';
                 await interaction.editReply({
                     flags: MessageFlags.IsComponentsV2,
-                    components: buildAckDisclosureV2(interaction.user.id, {
-                        kind,
-                        lastAckedAt: ack.ackedAt ?? null,
-                    })
+                    components: buildAckDisclosureV2(interaction.user.id, disclosureOptionsFor(ack))
                 });
                 return;
             }
@@ -274,6 +270,20 @@ export default {
                 flags: MessageFlags.IsComponentsV2,
                 components: buildFindPage({ verses, pageIdx: 0, totalPages, topic, translation })
             });
+
+            // A policy notice, if any, follows the result as an ephemeral
+            // message. Sent only now: a follow-up before the deferred reply is
+            // edited can take the place of the "thinking" placeholder.
+            if (ack.notices?.length) {
+                try {
+                    await interaction.followUp({
+                        flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+                        components: buildLegalNoticeV2(interaction.user.id, ack.notices),
+                    });
+                } catch (noticeErr) {
+                    logger.warn(`[Find Command] Could not send legal notice: ${noticeErr.message}`);
+                }
+            }
 
             if (totalPages <= 1) return;
 

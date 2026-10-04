@@ -137,6 +137,13 @@ test('deploy.js exits non-zero when the upload fails', () => {
     assert.equal(r.code, 1, r.out);
 });
 
+test('publishLegal.js refuses a prod PGHOST before fetching or connecting', () => {
+    const r = runScript('src/publishLegal.js', { PGHOST: PROD_HOST, PGUSER: 'x', PGPASSWORD: 'x', PGDATABASE: 'x' }, ['privacy', '1']);
+    assert.equal(r.code, 2, r.out);
+    assert.match(r.out, /Refusing to run src\/publishLegal\.js against production/);
+    assert.doesNotMatch(r.out, /Fetched|Published/, 'must stop before any network step');
+});
+
 test('pruneGuildData.js refuses a prod PGHOST before connecting', () => {
     const r = runScript('src/pruneGuildData.js', {
         PGHOST: PROD_HOST, PGUSER: 'x', PGPASSWORD: 'x', PGDATABASE: 'x', DISCORDTOKEN: fakeToken(TEST_CLIENT_ID),

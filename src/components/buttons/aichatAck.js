@@ -1,5 +1,9 @@
 import { MessageFlags } from 'discord.js';
-import { markAiTermsAcked, buildAckConfirmedV2 } from '../../utils/aiAck.js';
+import {
+    markAiTermsAcked, buildAckConfirmedV2, checkAckStatus, parseAckCustomId, isAckButtonCurrent,
+    buildAckDisclosureV2, buildAckDisclosurePayload, disclosureOptionsFor,
+} from '../../utils/aiAck.js';
+import { FALLBACK_REQUIRED_AT } from '../../utils/legalVersions.js';
 import { handleAiChat } from '../../utils/aiChat.js';
 import logger from '../../utils/logger.js';
 
@@ -24,17 +28,45 @@ import logger from '../../utils/logger.js';
 // has no reference), but the V2 flag is a more direct signal about which
 // render format the message currently uses.
 //
-// customId format: `aichat_ack:<userId>`
+// customId format: `aichat_ack:<userId>:<requiredMs>` (see aiAck.js). A
+// disclosure shown before a newer material version took effect is refreshed
+// with the current "What changed" instead of being saved, so a click only ever
+// acknowledges text the user was actually shown.
 export default {
     id: 'aichat_ack',
     async execute(interaction, database) {
-        const [, encodedUserId] = interaction.customId.split(':');
+        const { userId: encodedUserId, requiredMs } = parseAckCustomId(interaction.customId);
 
         if (encodedUserId && interaction.user.id !== encodedUserId) {
             await interaction.reply({
                 content: 'This acknowledgment notice is for a different user. Your own will appear the first time you use a feature that needs one.',
                 flags: MessageFlags.Ephemeral,
             });
+            return;
+        }
+
+        const isV2 = interaction.message?.flags?.has(MessageFlags.IsComponentsV2) ?? false;
+
+        const status = await checkAckStatus(database, interaction.user.id);
+        if (status.reason === 'error') {
+            await interaction.reply({
+                content: 'Couldn\'t check your acknowledgment right now — please try again in a moment.',
+                flags: MessageFlags.Ephemeral,
+            });
+            return;
+        }
+        if (!status.valid && !isAckButtonCurrent(requiredMs, status.requiredAt, FALLBACK_REQUIRED_AT)) {
+            // Outdated disclosure: show the current one in its place.
+            const options = disclosureOptionsFor(status);
+            try {
+                if (isV2) {
+                    await interaction.update({ components: buildAckDisclosureV2(interaction.user.id, options) });
+                } else {
+                    await interaction.update(buildAckDisclosurePayload(interaction.user.id, options));
+                }
+            } catch (err) {
+                logger.warn(`[AiAck] Could not refresh an outdated disclosure: ${err.message}`);
+            }
             return;
         }
 
@@ -48,8 +80,6 @@ export default {
             });
             return;
         }
-
-        const isV2 = interaction.message?.flags?.has(MessageFlags.IsComponentsV2) ?? false;
 
         try {
             if (isV2) {

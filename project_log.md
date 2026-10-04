@@ -4,6 +4,19 @@ Reverse-chronological log of significant changes, incidents and decisions. **New
 
 Started 2026-09-24 and seeded from the record that existed before it: `CLAUDE.md`'s release history, `FOLLOWUPS.md` (gitignored, local), the Claude memory files, and `git log`. Entries before 2026-09-24 are summaries; the detail lives in those sources, named per entry. Dates are when a change was made or deployed, as stated; where two sources disagree, both are given.
 
+
+## 2026-10-03
+
+### Legal documents in one place, versions in Neon (ops-platform Concern 10)
+
+Designed, approved by Kenneth, built. No legal wording changed.
+
+- **Neon restore history 24 h -> 6 h** (`history_retention_seconds` 21600 at 23:52:37 UTC, read back), so the Privacy Policy's "up to 6 hours" is true. Cost: point-in-time restore now reaches back 6 hours on every branch. Noticed the same day: `dev-local` is gone (only `main` and `stephen-dev` remain).
+- **Schema** `legal_document_versions` (`docs/ops/legal-versions.sql`), applied to `stephen-dev` then `main` as `biblicana_owner`. Append-only by trigger, TRUNCATE included (row triggers miss it); all three refusals tested on `stephen-dev` in rolled-back transactions, 0 rows left. Prod `userdata` untouched (184 rows).
+- **blueberean-site `53386aa`**: the policies are `legal/<document>/v<N>.md`. Version 1 is the live text: the old JSX pages and the built pages were compared element by element (1,070 and 470 tokens), 0 differences, and the comparison was mutation-tested. Prerendered for readers without JavaScript; checked where it runs (`wrangler dev`, assets-only Worker): `/privacy` and `/terms` answer 200 with the text and no redirect, the raw files are served byte-identical. Not deployed yet.
+- **Bot**: the gate reads Neon (see CLAUDE.md "Legal documents and the acknowledgment gate"); `TERMS_MIN_ACK_DATE` is gone and its cutoff is the fallback floor, so nothing changes at switchover. `legal:publish` behind the prod guard. 26 new tests; mutation checks confirmed the Got-it rule, the v1 no-notice rule and stale Acknowledge refresh are each caught. With Neon unreachable (real pg driver, closed port and unroutable host) the gate blocks exactly as today; an unroutable host costs one ~11 s check, then a minute of fallback. **Not yet run on the dev bot** (devbot-runner, `stephen-dev`): that and the deploys are next.
+- **Found in passing:** the live Privacy text says "guild- wide" (a stray space). Kept word for word; for the legal audit.
+
 ## 2026-10-01
 
 ### `pnpm verify` and a pre-push hook
